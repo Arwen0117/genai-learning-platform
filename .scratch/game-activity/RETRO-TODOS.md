@@ -41,7 +41,10 @@ complete.
   the container separately. The learner lesson page now loads the persisted container,
   renders its ordered Challenges inside one Game Activity boundary, and counts
   those Challenges in lesson progress. The editor now preserves and validates
-  the container during load/save; full Challenge authoring remains.
+  the container during load/save; full Challenge authoring remains. A public
+  progression helper now derives the next ordered Challenge and activity
+  completion from persisted completed Challenge IDs, and the learner page uses
+  it for activity completion and progress messaging.
 
 ### 2. Separate attempted, correct, and completed states
 - **Status:** [~]
@@ -57,7 +60,8 @@ complete.
 - **Progress:** Sort, Match, and Choose now expose Correction after an
   incorrect submission and allow the learner to complete the attempted
   Challenge without a correct retry. Activity-level continuation remains
-  blocked on the Game Activity container.
+  blocked on the Game Activity container. The progression helper now treats
+  attempted/completed Challenge IDs as the ordered activity progression input.
 
 ### 3. Unify all generation paths around the Game Activity contract
 

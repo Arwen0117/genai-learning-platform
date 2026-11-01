@@ -648,6 +648,8 @@
   "lesson.complete.last": "This was the last lesson of the course.",
   "lesson.complete.next": "Next lesson is unlocked — keep going.",
   "lesson.complete.title": "Lesson complete 🎉",
+  "lesson.gameActivity.complete": "Game Activity complete",
+  "lesson.gameActivity.progress": "Challenge {current} of {total}",
   "lesson.courseComplete.body": "You completed {title}. This course is now marked as finished on your dashboard.",
   "lesson.courseComplete.title": "Course complete",
   "lesson.metaTitle": "Lesson",

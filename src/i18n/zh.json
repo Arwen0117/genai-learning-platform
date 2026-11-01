@@ -648,6 +648,8 @@
   "lesson.complete.last": "这是本课程的最后一课。",
   "lesson.complete.next": "下一课已解锁，继续加油。",
   "lesson.complete.title": "本课完成 🎉",
+  "lesson.gameActivity.complete": "游戏活动已完成",
+  "lesson.gameActivity.progress": "第 {current} 个挑战，共 {total} 个",
   "lesson.courseComplete.body": "你已完成《{title}》。课程已在你学习面板标记为完成。",
   "lesson.courseComplete.title": "课程完成",
   "lesson.metaTitle": "课时",

@@ -29,6 +29,7 @@ import { auth } from "@/lib/auth";
 import { applyBlockOverrides } from "@/lib/blocks/override";
 import { blockListSchema } from "@/lib/blocks/schema";
 import { gameActivityContainerSchema } from "@/lib/game-activity";
+import { getGameActivityProgress } from "@/lib/game-activity-progression";
 import {
   flattenLessons,
   getCourseById,
@@ -199,9 +200,13 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
   const next = lessons[index + 1];
 
   const completedBlocks = progress.get(lessonId)?.completedBlocks ?? [];
+  const gameActivityProgress = gameActivity
+    ? getGameActivityProgress(gameActivity, completedBlocks)
+    : null;
   const allBlocksDone =
     learnerActivities.length > 0 &&
-    learnerActivities.every((block) => completedBlocks.includes(block.id));
+    blocks.every((block) => completedBlocks.includes(block.id)) &&
+    (gameActivityProgress === null || gameActivityProgress.completed);
   const courseCompleted =
     !canPreview &&
     (enrollment?.completedAt != null ||
@@ -336,6 +341,15 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
                 >
                   {gameActivity.title}
                 </h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {gameActivityProgress?.completed
+                    ? t("lesson.gameActivity.complete")
+                    : t("lesson.gameActivity.progress", {
+                        current:
+                          (gameActivityProgress?.nextChallengeIndex ?? 0) + 1,
+                        total: gameActivity.challenges.length,
+                      })}
+                </p>
               </header>
               <div className="space-y-4">
                 {activityChallenges.map((block) => (
