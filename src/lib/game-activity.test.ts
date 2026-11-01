@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  gameActivityContainerSchema,
   gameActivitySchema,
   validateGameActivity,
   type GameActivity,
@@ -31,6 +32,33 @@ const challenge = (index: number): GameActivity[number] => ({
 });
 
 describe("game activity validation", () => {
+  it("accepts an explicit container with ordered challenges", () => {
+    const container = {
+      id: "activity-1",
+      title: "API design practice",
+      challenges: mockGameActivity("en"),
+    };
+
+    expect(gameActivityContainerSchema.safeParse(container).success).toBe(true);
+    expect(validateGameActivity(container, "en")).toEqual({ ok: true });
+  });
+
+  it("rejects a container with duplicate Challenge identities", () => {
+    const challenges = mockGameActivity("en");
+    const container = {
+      id: "activity-1",
+      title: "API design practice",
+      challenges: [
+        challenges[0],
+        { ...challenges[1], id: challenges[0].id },
+        ...challenges.slice(2),
+      ],
+    };
+
+    expect(gameActivityContainerSchema.safeParse(container).success).toBe(false);
+    expect(validateGameActivity(container, "en").ok).toBe(false);
+  });
+
   it("uses canonical Game Activity terminology in generation guidance", () => {
     expect(
       gameActivityPrompt({

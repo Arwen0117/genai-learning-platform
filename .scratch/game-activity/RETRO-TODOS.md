@@ -10,18 +10,21 @@ Status values:
 
 ## Current progress
 
-Four of the fourteen follow-up tasks have been completed. Task 5 remains in
-progress because learner-facing history now has qualitative Correction, Hint,
-and Playthrough response details, but ordered Challenge progress requires the
-Game Activity container. Task 12 remains in progress because GitHub branch
-protection must still make the verification workflow a required check. Tasks
-13 and 14 are complete.
+Four of the fourteen follow-up tasks have been completed. Task 1 is now in
+progress because the shared validator accepts an explicit activity boundary
+with an identity, title, and ordered Challenges, while legacy array callers
+still need migration. Task 5 remains in progress because learner-facing
+history now has qualitative Correction, Hint, and Playthrough response
+details, but ordered Challenge progress requires the migrated Game Activity
+container. Task 12 remains in progress because GitHub branch protection must
+still make the verification workflow a required check. Tasks 13 and 14 are
+complete.
 
 ## Implementation backlog
 
 ### 1. Replace independent game blocks with one Game Activity
 
-- **Status:** [ ]
+- **Status:** [~]
 - **Blocked by:** None
 - **Finding:** The agreed model is one Game Activity containing an ordered sequence of Challenges, but the current implementation represents the activity as five independent Game Activity blocks.
 - **Work:**
@@ -30,6 +33,9 @@ protection must still make the verification workflow a required check. Tasks
   - Add activity-level progress, completion, replay, and authoring boundaries.
   - Update learner rendering and lesson composition to use the container.
 - **Done when:** A learner sees one Game Activity with ordered Challenge progress, and the editor/generator operate on that same model.
+- **Progress:** Added a first-class `id`/`title`/ordered `challenges` schema and
+  validator support, including unique Challenge identity checks. Existing
+  array-based generation and rendering callers still require migration.
 
 ### 2. Separate attempted, correct, and completed states
 - **Status:** [~]

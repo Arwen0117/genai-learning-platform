@@ -13,8 +13,31 @@ export const gameChallengeSchema = gameBlockSchema.superRefine((block, ctx) => {
   }
 });
 
+/**
+ * First-class activity boundary. The legacy array schema remains exported
+ * while callers migrate, but new surfaces can validate an activity without
+ * losing its identity, title, or Challenge ordering.
+ */
+export const gameActivityContainerSchema = z
+  .object({
+    id: z.string().min(1),
+    title: z.string().min(1),
+    challenges: z.array(gameChallengeSchema).length(5),
+  })
+  .superRefine((activity, ctx) => {
+    const ids = activity.challenges.map((challenge) => challenge.id);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["challenges"],
+        message: "Game Activity Challenges must have unique ids.",
+      });
+    }
+  });
+
 export const gameActivitySchema = z.array(gameChallengeSchema).length(5);
 export type GameActivity = z.infer<typeof gameActivitySchema>;
+export type GameActivityContainer = z.infer<typeof gameActivityContainerSchema>;
 
 type ValidationResult =
   | { ok: true }
@@ -67,18 +90,26 @@ export function validateGameActivity(
   input: unknown,
   language: ContentLanguage,
 ): ValidationResult {
-  const parsed = gameActivitySchema.safeParse(input);
+  const isContainer =
+    typeof input === "object" && input !== null && !Array.isArray(input);
+  const parsed = isContainer
+    ? gameActivityContainerSchema.safeParse(input)
+    : gameActivitySchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, errors: parsed.error.issues.map((issue) => issue.message) };
   }
 
+  const challenges: GameActivity =
+    isContainer
+      ? (parsed.data as GameActivityContainer).challenges
+      : (parsed.data as GameActivity);
   const errors: string[] = [];
-  const variants = new Set(parsed.data.map((block) => block.payload.variant));
+  const variants = new Set(challenges.map((block) => block.payload.variant));
   for (const variant of ["sort", "match", "choose"] as const) {
     if (!variants.has(variant))
       errors.push(`The activity needs at least one ${variant} Challenge.`);
   }
-  for (const [index, block] of parsed.data.entries()) {
+  for (const [index, block] of challenges.entries()) {
     const payload = block.payload;
     if (payload.variant === "choose" && payload.options.filter((option) => !option.correct).length < 2)
       errors.push(`Challenge ${index + 1} needs at least two plausible distractors.`);
