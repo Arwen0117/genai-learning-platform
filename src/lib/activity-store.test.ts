@@ -32,6 +32,7 @@ const input = {
   lessonId: "l",
   block,
   blocks: [block],
+  activityId: "activity-1",
   attemptId: "attempt",
   answer: { order: [0, 1] },
   grade: {
@@ -72,9 +73,14 @@ describe("atomic activity persistence", () => {
       version: 1,
       answer: input.answer,
       activitySnapshot: block,
+      activityId: "activity-1",
+      attempted: true,
       score: { normalized: 1 },
       contentVersion: expect.stringMatching(/^[a-f0-9]{16}$/),
       firstPass: true,
+    });
+    expect(m.event.mock.calls[0][0].data.payload).toMatchObject({
+      activityId: "activity-1",
     });
     expect(m.event.mock.calls.map((c) => c[0].data.type)).toEqual([
       "GAME_FINISH",
@@ -175,5 +181,55 @@ describe("atomic activity persistence", () => {
       firstPass: true,
       attemptNumber: 2,
     });
+  });
+
+  it("does not mark hints as substantive attempts", async () => {
+    await persistActivity({
+      ...input,
+      answer: { kind: "hint" },
+      grade: {
+        ...input.grade,
+        completed: false,
+        passed: null,
+        verification: "ungraded",
+        feedback: { kind: "hint" },
+      },
+    });
+
+    expect(m.create.mock.calls[0][0].data.result).toMatchObject({
+      attempted: false,
+      firstPass: false,
+      attemptNumber: 1,
+    });
+  });
+
+  it("uses the persisted attempted flag for hints with a normal answer payload", async () => {
+    m.list.mockResolvedValue([
+      {
+        blockId: "g",
+        result: {
+          attempted: false,
+          answer: { variant: "choose", option: 0 },
+        },
+      },
+    ]);
+
+    await persistActivity({
+      ...input,
+      answer: { variant: "choose", option: 0 },
+      grade: {
+        ...input.grade,
+        feedback: { kind: "hint" },
+      },
+    });
+
+    m.create.mockClear();
+    await persistActivity({
+      ...input,
+      answer: { variant: "choose", option: 0 },
+      attemptId: "second-attempt",
+    });
+
+    expect(m.create.mock.calls[0][0].data.result.firstPass).toBe(true);
   });
 });

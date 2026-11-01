@@ -51,6 +51,7 @@ export async function activityAccess(
         courseId: undefined,
         block,
         blocks: [block],
+        activityId: undefined,
         preview: true,
       };
     }
@@ -75,12 +76,19 @@ export async function activityAccess(
     const blocks = storedBlocks(lesson);
     const block = blocks.find((b) => b.id === blockId);
     if (!block) throw new Error("Activity not found.");
+    const activity = gameActivityContainerSchema.safeParse(lesson.gameActivity);
+    const activityId =
+      activity.success &&
+      activity.data.challenges.some((challenge) => challenge.id === blockId)
+        ? activity.data.id
+        : undefined;
 
     return {
       userId: user.id,
       courseId: course.id,
       block,
       blocks,
+      activityId,
       preview: true,
     };
   }
@@ -102,6 +110,11 @@ export async function activityAccess(
   const block = blocks.find((b) => b.id === blockId);
   if (!block) throw new Error("Activity not found.");
   const activity = gameActivityContainerSchema.safeParse(lesson.gameActivity);
+  const activityId =
+    activity.success &&
+    activity.data.challenges.some((challenge) => challenge.id === blockId)
+      ? activity.data.id
+      : undefined;
   if (activity.success && activity.data.challenges.some((b) => b.id === blockId)) {
     const progress = await prisma.lessonProgress.findUnique({
       where: { userId_lessonId: { userId: user.id, lessonId } },
@@ -128,6 +141,7 @@ export async function activityAccess(
     courseId: course.id,
     block,
     blocks,
+    activityId,
     preview: false,
   };
 }

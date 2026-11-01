@@ -12,7 +12,11 @@ export function contentVersionForBlock(block: Block): string {
 }
 
 function isSubstantiveAttempt(row: { result: unknown }): boolean {
-  const previous = row.result as { answer?: { kind?: unknown } };
+  const previous = row.result as {
+    answer?: { kind?: unknown };
+    attempted?: unknown;
+  };
+  if (typeof previous.attempted === "boolean") return previous.attempted;
   return previous.answer?.kind !== "hint" && previous.answer?.kind !== "replay";
 }
 
@@ -22,6 +26,7 @@ export async function persistActivity(input: {
   lessonId: string;
   block: Block;
   blocks: Block[];
+  activityId?: string;
   attemptId: string;
   answer: Record<string, unknown>;
   grade: ActivityGrade;
@@ -32,6 +37,7 @@ export async function persistActivity(input: {
     lessonId,
     block,
     blocks,
+    activityId,
     attemptId,
     answer,
     grade,
@@ -66,7 +72,11 @@ export async function persistActivity(input: {
               previous.playthroughId === playthroughId
             );
           });
-          const isSignal = answer.kind === "hint" || answer.kind === "replay";
+          const isSignal =
+            answer.kind === "hint" ||
+            answer.kind === "replay" ||
+            grade.feedback.kind === "hint";
+          const attempted = !isSignal;
           const result = {
             version: 1,
             attemptId,
@@ -74,9 +84,11 @@ export async function persistActivity(input: {
             blockId: block.id,
             lessonId,
             courseId,
+            activityId: activityId ?? null,
             contentVersion,
             playthroughId,
             attemptNumber: priorPlaythroughAttempts.length + 1,
+            attempted,
             firstPass: !isSignal && !priorPlaythroughAttempts.some(isSubstantiveAttempt),
             answer,
             ...grade,
@@ -149,12 +161,14 @@ export async function persistActivity(input: {
             lessonId,
             blockId: block.id,
             activityType: block.type,
+            activityId: activityId ?? null,
             score: grade.score?.normalized ?? null,
             completed: grade.completed,
             passed: grade.passed,
             contentVersion,
             playthroughId,
             attemptNumber: priorPlaythroughAttempts.length + 1,
+            attempted,
             firstPass: !isSignal && !priorPlaythroughAttempts.some(isSubstantiveAttempt),
             ...grade.feedback,
           } as Prisma.InputJsonValue;

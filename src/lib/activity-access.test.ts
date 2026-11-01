@@ -59,6 +59,7 @@ describe("activity access / preview isolation", () => {
 
     expect(access.block).toEqual(challenge);
     expect(access.blocks).toContainEqual(challenge);
+    expect(access.activityId).toBe("activity-1");
   });
   it("rejects a later Game Activity Challenge until earlier Challenges are complete", async () => {
     await expect(activityAccess("l", "challenge-2")).rejects.toThrow(
@@ -75,7 +76,10 @@ describe("activity access / preview isolation", () => {
     });
   });
   it("allows an enrolled learner in a published lesson", async () =>
-    expect((await activityAccess("l", "b")).preview).toBe(false));
+    expect(await activityAccess("l", "b")).toMatchObject({
+      preview: false,
+      activityId: undefined,
+    }));
   it("rejects a non-enrolled learner", async () => {
     mocks.enrollment.mockResolvedValue(null);
     await expect(activityAccess("l", "b")).rejects.toThrow();

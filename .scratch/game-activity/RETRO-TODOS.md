@@ -47,6 +47,9 @@ complete.
   it for activity completion and progress messaging. Learner submissions now
   enforce the next ordered Challenge at the activity access boundary, and the
   learner renderer presents later Challenges as locked until their turn.
+  Persisted Challenge attempts and engagement events now carry the parent
+  Game Activity identity when one exists, while legacy blocks remain
+  activity-id free.
 
 ### 2. Separate attempted, correct, and completed states
 - **Status:** [~]
@@ -66,6 +69,11 @@ complete.
   attempted/completed Challenge IDs as the ordered activity progression input,
   and server access rejects later Challenges until earlier ones are complete.
   The learner UI now mirrors that ordering with locked Challenge states.
+  Attempt records also preserve the parent activity identity for future
+  Playthrough-level history, and persisted submissions now include an explicit
+  `attempted` flag separate from `passed`, `firstPass`, and `completed`.
+  Hint signals are excluded from substantive-attempt state, and compatibility
+  progress events include the same server-derived activity identity.
 
 ### 3. Unify all generation paths around the Game Activity contract
 
