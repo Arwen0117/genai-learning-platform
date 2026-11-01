@@ -2,6 +2,57 @@ import type { Action } from "@/lib/programming-game/engine";
 
 export const GAME_MESSAGES = {
   en: {
+    programmingVariant: "Programming challenge",
+    presetNote:
+      "Switching presets replaces the task, allowed commands, hints and knowledge cards. Maps are fixed in this version.",
+    allowedLabel: "Allowed commands",
+    allowedNote:
+      "Validation checks that the preset reference solution still works. This is conservative; it does not search for every possible solution.",
+    allowedInvalid:
+      "Restore the commands needed by the preset reference solution.",
+    hintsLabel: "Hints (one per line, up to 12)",
+    knowledgeCourseNote:
+      "These cards are part of this activity. Use Save course to store them; learners see them when the course is published. They are separate from workshop browser drafts.",
+    taskLabel: "Task description",
+    submitRun: "Submit this run",
+    retrySubmit: "Retry this submission",
+    submitting: "Submitting…",
+    submitted: "Submission saved",
+    serverNote:
+      "Success and failure can both be submitted. Only a passed server grade completes the activity.",
+    serverPassed: "Server verified: passed",
+    serverNotPassed: "Saved: not passed",
+    submitTimeout:
+      "Submission timed out. Retry the same run; duplicate records will not be created.",
+    submitFailed:
+      "Could not save this run. Your program is still here; retry the submission.",
+    levelChanged:
+      "The level has been updated. Your program is retained here; copy it before reloading, then run against the new level.",
+    rawRecord: "Raw record and grading snapshot",
+    finalState: "Final state",
+    noError: "No execution error",
+    knowledgeHeading: "Programming ideas in this level",
+    knowledgeIntro:
+      "Connect your actions to programming concepts. Read before or after playing, then test your understanding with Step.",
+    knowledgeEmpty: "No knowledge cards have been added yet.",
+    knowledgeEditor: "Teacher: edit level knowledge",
+    knowledgeDraftNote:
+      "Workshop drafts only: changes appear above immediately. Save stores this level and language for your account in this browser. After refresh, use Load to restore them. This does not save to a course or publish to students. Load replaces the current level's unsaved text.",
+    knowledgeCard: "Knowledge card",
+    knowledgeTitle: "Concept title",
+    knowledgeBody: "Explanation, code connection and reflection question",
+    knowledgeRemove: "Remove card",
+    knowledgeAdd: "Add knowledge card",
+    knowledgeSave: "Save in this browser",
+    knowledgeLoad: "Load saved draft",
+    knowledgeSaved: "Saved in this browser. Not published to a course.",
+    knowledgeLoaded: "Loaded this level's saved draft.",
+    knowledgeNoDraft:
+      "No saved draft for this level and language in this browser.",
+    knowledgeStorageError:
+      "Could not save or load the draft. Check browser storage or draft format; the current text is still available.",
+    knowledgeLimits:
+      "Up to 12 cards; 120 characters per title and 4,000 per explanation. Plain text only.",
     labTitle: "Programming game workshop",
     labNote:
       "Teacher testing only. Runs are local; no grades, attempts or progress are saved.",
@@ -25,6 +76,8 @@ export const GAME_MESSAGES = {
     resume: "Continue",
     step: "Step",
     reset: "Reset map",
+    clear: "Clear program",
+    clearNote: "Remove all commands and restore the initial map.",
     speed: "Step duration",
     fast: "Fast",
     normal: "Normal",
@@ -49,7 +102,10 @@ export const GAME_MESSAGES = {
     wall: "Wall",
     robot: "Robot",
     emptyCell: "Empty",
-    legend: "R = Robot · P = Parcel · G = Goal · # = Wall",
+    legend: "Map legend",
+    warehouse: "ROBOT DEPOT",
+    sector: "SECTOR",
+    mapScroll: "Warehouse map. Scroll horizontally to explore larger maps.",
     limits:
       "Up to 50 nodes, 20 repetitions per loop and 500 execution steps. Loops cannot be nested.",
     hint: "Hint",
@@ -85,6 +141,52 @@ export const GAME_MESSAGES = {
     } as Record<string, string>,
   },
   zh: {
+    programmingVariant: "编程闯关",
+    presetNote:
+      "切换预设会替换任务、允许指令、提示和知识卡片。本版不编辑地图。",
+    allowedLabel: "允许指令",
+    allowedNote:
+      "校验预设参考解仍能执行，不会搜索所有可能的解法；参考解被禁用时无法保存。",
+    allowedInvalid: "缺少预设参考解需要的指令，请恢复后再保存。",
+    hintsLabel: "提示（每行一条，最多 12 条）",
+    knowledgeCourseNote:
+      "这些知识卡片属于当前活动，请使用课程的“保存”按钮保存。发布课程后学生可阅读；与测试页的浏览器草稿分开。",
+    taskLabel: "任务说明",
+    submitRun: "提交本次运行",
+    retrySubmit: "重试本次提交",
+    submitting: "提交中…",
+    submitted: "本次提交已保存",
+    serverNote: "成功或失败均可提交，只有服务端确认通过才会完成活动。",
+    serverPassed: "服务端已确认：通过",
+    serverNotPassed: "已保存：未通过",
+    submitTimeout: "提交超时，请重试本次运行；不会重复创建记录。",
+    submitFailed: "本次运行未能保存，程序仍保留，请重试提交。",
+    levelChanged:
+      "关卡已更新，当前程序仍保留。请先复制指令，再重新加载关卡并运行。",
+    rawRecord: "原始记录与评分快照",
+    finalState: "最终状态",
+    noError: "没有执行错误",
+    knowledgeHeading: "本关编程知识",
+    knowledgeIntro:
+      "把游戏中的操作与编程思想联系起来。可以在游戏前后阅读，再用单步运行验证自己的理解。",
+    knowledgeEmpty: "教师尚未添加知识卡片。",
+    knowledgeEditor: "教师：编辑本关知识",
+    knowledgeDraftNote:
+      "当前为测试页草稿：修改会立即显示在上方。“保存”仅按当前账号、关卡和语言存到此浏览器，刷新后需点击“载入”。不会保存到课程或发布给学生。“载入”会替换本关尚未保存的文字。",
+    knowledgeCard: "知识卡片",
+    knowledgeTitle: "知识点标题",
+    knowledgeBody: "知识讲解、与代码的联系及思考题",
+    knowledgeRemove: "删除知识卡片",
+    knowledgeAdd: "添加知识卡片",
+    knowledgeSave: "保存到此浏览器",
+    knowledgeLoad: "载入已保存草稿",
+    knowledgeSaved: "已保存到此浏览器，尚未发布到课程。",
+    knowledgeLoaded: "已载入本关保存的草稿。",
+    knowledgeNoDraft: "此浏览器中没有本关当前语言的已保存草稿。",
+    knowledgeStorageError:
+      "无法保存或载入草稿，请检查浏览器存储设置或草稿格式；当前文字仍保留。",
+    knowledgeLimits:
+      "最多 12 张卡片；标题最多 120 字符，讲解最多 4,000 字符；仅支持纯文本。",
     labTitle: "编程游戏测试台",
     labNote: "仅供教师测试。本地运行，不保存成绩、尝试或学习进度。",
     choose: "选择关卡",
@@ -107,6 +209,8 @@ export const GAME_MESSAGES = {
     resume: "继续",
     step: "单步",
     reset: "重置地图",
+    clear: "清空程序",
+    clearNote: "删除全部指令，并恢复初始地图。",
     speed: "每步时长",
     fast: "快速",
     normal: "正常",
@@ -131,7 +235,10 @@ export const GAME_MESSAGES = {
     wall: "障碍",
     robot: "机器人",
     emptyCell: "空格",
-    legend: "R = 机器人 · P = 物品 · G = 目标 · # = 障碍",
+    legend: "地图图例",
+    warehouse: "机器人配送站",
+    sector: "区域",
+    mapScroll: "仓库地图。大地图可左右滚动查看。",
     limits: "最多 50 个节点、单次循环 20 次、总执行 500 步；不允许嵌套循环。",
     hint: "提示",
     hintsEmpty: "本关暂无提示。",

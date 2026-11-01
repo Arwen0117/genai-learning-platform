@@ -6,9 +6,10 @@ import type {
 } from "@/lib/blocks/schema";
 import { MatchGame } from "./MatchGame";
 import { SortGame } from "./SortGame";
+import { ProgrammingActivity } from "./programming-game/ProgrammingActivity";
 
 /**
- * Game block: a thin dispatcher over the two mini-games.
+ * Game block: a thin dispatcher over sorting, matching and programming games.
  *
  * It owns the two things the games should not know about — which lesson they
  * belong to and how a finished run is recorded — and hands the puzzle itself
@@ -19,6 +20,7 @@ export function GameBlock({
   completed,
   onAttempt,
   onComplete,
+  context,
 }: BlockRenderProps<GameBlockData>) {
   const { payload } = block;
 
@@ -26,6 +28,10 @@ export function GameBlock({
     onAttempt?.({ answer: stats });
   }
 
+  if (payload.variant === "programming") {
+    return <ProgrammingActivity payload={payload} title={block.title}
+      blockId={block.id} lessonId={context.lessonId} preview={context.preview === true} />;
+  }
   if (payload.variant === "sort") {
     return (
       <SortGame

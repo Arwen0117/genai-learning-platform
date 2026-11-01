@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useId, useReducer, useState } from "react";
+import { useEffect, useId, useReducer, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   ACTIONS,
   LIMITS,
-  samePoint,
   type Action,
   type Command,
   type Level,
@@ -18,18 +17,26 @@ import {
   playerReducer,
 } from "@/lib/programming-game/player";
 import { GAME_MESSAGES } from "./messages";
+import { WarehouseBoard } from "./WarehouseBoard";
+import type { ProgrammingSubmitResult } from "./ProgrammingActivity";
+import type { KnowledgeCard } from "@/lib/programming-game/knowledge";
 
 export type ProgrammingGameProps = {
   level: Level;
   title: string;
   task: string;
   hints?: string[];
+  knowledge?: KnowledgeCard[];
   locale: "en" | "zh";
+  onSubmit?: (run: {
+    attemptId: string;
+    program: Program;
+  }) => Promise<ProgrammingSubmitResult>;
 };
 const SELECT =
   "h-9 max-w-full rounded-lg border border-input bg-background px-2 text-sm";
 
-/** Local interaction only. Integration with official submissions is a later step. */
+/** Local playback with an optional callback for server-verified terminal submissions. */
 export function ProgrammingGame(props: ProgrammingGameProps) {
   // New rule data remounts the session, cancelling timers and stale results.
   return <GameSession key={JSON.stringify(props.level)} {...props} />;
@@ -40,12 +47,64 @@ function GameSession({
   title,
   task,
   hints = [],
+  knowledge = [],
   locale,
+  onSubmit,
 }: ProgrammingGameProps) {
   const m = GAME_MESSAGES[locale];
   const [state, dispatch] = useReducer(playerReducer, undefined, initialPlayer);
   const [delay, setDelay] = useState(500);
   const id = useId();
+  const attemptId = useRef<string | null>(null);
+  const runSubmit = useRef(onSubmit);
+  const submitting = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [submission, setSubmission] = useState<ProgrammingSubmitResult | null>(
+    null,
+  );
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  function invalidateSubmission() {
+    attemptId.current = null;
+    setSubmission(null);
+  }
+  function begin(type: "run" | "step") {
+    if (submitting.current) return;
+    if (type === "run" || !state.execution) {
+      attemptId.current = crypto.randomUUID();
+      // Bind this run to the content rendered when it began.
+      runSubmit.current = onSubmit;
+      setSubmission(null);
+    }
+    dispatch({ type, level });
+  }
+  async function submit() {
+    const handler = runSubmit.current;
+    if (
+      !handler ||
+      !terminal ||
+      !attemptId.current ||
+      submitting.current ||
+      submission?.ok
+    )
+      return;
+    submitting.current = true;
+    setBusy(true);
+    try {
+      const result = await handler({ attemptId: attemptId.current, program });
+      if (mounted.current) setSubmission(result);
+    } catch {
+      if (mounted.current) setSubmission({ ok: false, error: m.submitFailed });
+    } finally {
+      submitting.current = false;
+      if (mounted.current) setBusy(false);
+    }
+  }
   const execution = state.execution;
   const terminal = isTerminal(execution);
   const program = state.program;
@@ -77,6 +136,8 @@ function GameSession({
   }, []);
 
   function edit(updated: Program) {
+    if (submitting.current) return;
+    invalidateSubmission();
     dispatch({ type: "edit", program: updated });
   }
   function changeBody(index: number, body: { op: Action }[]) {
@@ -248,7 +309,7 @@ function GameSession({
         : m[execution.status]
       : m.ready;
   return (
-    <section className="space-y-5" aria-label={title}>
+    <fieldset disabled={busy} className="min-w-0 space-y-5" aria-label={title}>
       <header className="space-y-2">
         <h2 className="text-xl font-semibold">{title}</h2>
         <p className="text-sm">{task}</p>
@@ -257,47 +318,14 @@ function GameSession({
       <div className="grid min-w-0 gap-5 lg:grid-cols-2">
         <section className="min-w-0 space-y-3" aria-label={m.map}>
           <h3 className="font-medium">{m.map}</h3>
-          <div className="overflow-x-auto rounded-xl border bg-muted/20 p-3">
-            <div
-              role="table"
-              aria-label={m.map}
-              className="mx-auto w-max space-y-1"
-            >
-              {Array.from({ length: level.height }, (_, y) => (
-                <div role="row" key={y} className="flex gap-1">
-                  {Array.from({ length: level.width }, (_, x) => {
-                    const at = { x, y };
-                    const isRobot = samePoint(robot, at);
-                    const isItem = samePoint(item, at);
-                    const isGoal = samePoint(level.goal.at, at);
-                    const isWall = level.walls.some((p) => samePoint(p, at));
-                    const labels = [
-                      isRobot && m.robot,
-                      isItem && m.parcel,
-                      isGoal && m.goal,
-                      isWall && m.wall,
-                    ].filter(Boolean);
-                    return (
-                      <div
-                        role="cell"
-                        key={x}
-                        aria-label={`${x},${y}: ${labels.join(", ") || m.emptyCell}`}
-                        className={`flex size-11 shrink-0 items-center justify-center rounded-md border font-mono text-sm ${isWall ? "bg-foreground/20" : isGoal ? "border-primary bg-primary/10" : "bg-background"}`}
-                      >
-                        <span aria-hidden="true">
-                          {isWall
-                            ? "#"
-                            : `${isRobot ? "R" : ""}${isItem ? "P" : ""}${isGoal ? "G" : ""}` ||
-                              "·"}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">{m.legend}</p>
+          <WarehouseBoard
+            level={level}
+            robot={robot}
+            item={item}
+            holding={execution?.holding ?? false}
+            status={execution?.status ?? "ready"}
+            locale={locale}
+          />
           <p className="text-sm" data-testid="robot-position">
             {m.position}: ({robot.x}, {robot.y})
           </p>
@@ -324,7 +352,19 @@ function GameSession({
               {m.nodes}: {nodes}/{LIMITS.nodes}
             </span>
           </div>
-          {addButtons()}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {addButtons()}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!program.length}
+              onClick={() => edit([])}
+              title={m.clearNote}
+            >
+              {m.clear}
+            </Button>
+          </div>
           {!program.length ? (
             <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
               {m.empty}
@@ -340,7 +380,7 @@ function GameSession({
           <Button
             type="button"
             disabled={!program.length}
-            onClick={() => dispatch({ type: "run", level })}
+            onClick={() => begin("run")}
           >
             {execution ? m.restart : m.run}
           </Button>
@@ -364,14 +404,17 @@ function GameSession({
             type="button"
             variant="outline"
             disabled={!program.length || state.playing || terminal}
-            onClick={() => dispatch({ type: "step", level })}
+            onClick={() => begin("step")}
           >
             {m.step}
           </Button>
           <Button
             type="button"
             variant="outline"
-            onClick={() => dispatch({ type: "reset" })}
+            onClick={() => {
+              invalidateSubmission();
+              dispatch({ type: "reset" });
+            }}
           >
             {m.reset}
           </Button>
@@ -422,11 +465,67 @@ function GameSession({
                 : m.needLoop}
           </p>
         ))}
-        {terminal ? (
+        {terminal && !onSubmit ? (
           <p className="text-sm text-muted-foreground">{m.local}</p>
+        ) : null}
+        {terminal && onSubmit ? (
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">{m.serverNote}</p>
+            <Button
+              type="button"
+              disabled={busy || submission?.ok === true}
+              onClick={() => void submit()}
+            >
+              {busy
+                ? m.submitting
+                : submission?.ok
+                  ? m.submitted
+                  : submission
+                    ? m.retrySubmit
+                    : m.submitRun}
+            </Button>
+            {submission?.ok ? (
+              <p role="status" className="text-sm">
+                {submission.grade.completed
+                  ? m.serverPassed
+                  : m.serverNotPassed}{" "}
+                · {submission.grade.score?.raw ?? 0}/100
+              </p>
+            ) : submission ? (
+              <p role="alert" className="text-sm text-destructive">
+                {submission.code === "LEVEL_CHANGED"
+                  ? m.levelChanged
+                  : submission.error}
+              </p>
+            ) : null}
+          </div>
         ) : null}
         <p className="text-xs text-muted-foreground">{m.resetNote}</p>
       </div>
-    </section>
+      <section
+        className="space-y-3 border-t pt-5"
+        aria-label={m.knowledgeHeading}
+      >
+        <h3 className="text-lg font-semibold">{m.knowledgeHeading}</h3>
+        <p className="text-sm text-muted-foreground">{m.knowledgeIntro}</p>
+        {knowledge.length ? (
+          knowledge.map((card, index) => (
+            <article
+              key={index}
+              className="min-w-0 space-y-2 rounded-xl border bg-muted/20 p-4"
+            >
+              {card.title ? (
+                <h4 className="break-words font-medium">{card.title}</h4>
+              ) : null}
+              <p className="whitespace-pre-wrap break-words text-sm leading-7">
+                {card.body}
+              </p>
+            </article>
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground">{m.knowledgeEmpty}</p>
+        )}
+      </section>
+    </fieldset>
   );
 }

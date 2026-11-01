@@ -126,3 +126,28 @@ describe("atomic activity persistence", () => {
     expect(m.event).not.toHaveBeenCalled();
   });
 });
+
+// New variant must keep the same atomic completion and event guarantees.
+describe("programming attempt events", () => {
+  it("records an unsuccessful programming run without completing its block", async () => {
+    const { createProgrammingPayload } = await import("./programming-game/config");
+    const game: Block = { ...block, type: "game", payload: createProgrammingPayload("first-route", "en") };
+    m.list.mockResolvedValue([{ blockId: "g", result: { score: { normalized: 0 } } }]);
+    await persistActivity({ ...input, block: game, blocks: [game], grade: {
+      ...input.grade, completed: false, passed: false,
+      score: { raw: 0, min: 0, max: 100, normalized: 0 }, feedback: { variant: "programming", status: "error" },
+    } });
+    expect(m.upsert.mock.calls[0][0].update.completedBlocks).toEqual([]);
+    expect(m.event.mock.calls.map((c) => c[0].data.type)).toEqual(["GAME_ATTEMPT"]);
+    expect(m.event.mock.calls[0][0].data.payload.variant).toBe("programming");
+  });
+  it("keeps an earlier completion when a later programming run fails", async () => {
+    const { createProgrammingPayload } = await import("./programming-game/config");
+    const game: Block = { ...block, type: "game", payload: createProgrammingPayload("first-route", "en") };
+    m.progress.mockResolvedValue({ completedBlocks: ["g"] });
+    m.list.mockResolvedValue([{ blockId: "g", result: { score: { normalized: 0 } } }]);
+    await persistActivity({ ...input, block: game, blocks: [game], grade: { ...input.grade, completed: false, passed: false, feedback: { variant: "programming" } } });
+    expect(m.upsert.mock.calls[0][0].update.completedBlocks).toEqual(["g"]);
+    expect(m.event.mock.calls.map((c) => c[0].data.type)).toEqual(["GAME_ATTEMPT"]);
+  });
+});

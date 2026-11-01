@@ -33,6 +33,8 @@ function blockText(block: Block): string {
     case "coding":
       return `${block.payload.problem} ${block.payload.hints.join(" ")}`;
     case "game":
+      if (block.payload.variant === "programming")
+        return [block.payload.task, ...block.payload.hints, ...block.payload.knowledge.map((c) => `${c.title} ${c.body}`)].join(" ");
       return block.payload.variant === "sort"
         ? block.payload.items.map((item) => item.text).join(" ")
         : block.payload.pairs

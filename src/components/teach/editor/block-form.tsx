@@ -7,7 +7,11 @@ import { MarkdownView } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useT } from "@/i18n/client";
+import { useT, useI18n } from "@/i18n/client";
+import { ProgrammingForm } from "./programming-form";
+import { createProgrammingPayload } from "@/lib/programming-game/config";
+import { getTemplate } from "@/lib/programming-game/levels";
+import { GAME_MESSAGES } from "@/components/blocks/programming-game/messages";
 import type { Translator } from "@/i18n/translate";
 import type {
   Block,
@@ -938,6 +942,8 @@ function CodingForm({ block, onChange }: FormProps<"coding">) {
 
 function GameForm({ block, onChange }: FormProps<"game">) {
   const t = useT();
+  const { locale } = useI18n();
+  const m = GAME_MESSAGES[locale];
   const payload = block.payload;
   const sortedItems =
     payload.variant === "sort"
@@ -960,11 +966,15 @@ function GameForm({ block, onChange }: FormProps<"game">) {
     updateItems(items);
   }
 
-  function switchVariant(variant: "sort" | "match"): void {
+  function switchVariant(variant: "sort" | "match" | "programming"): void {
     if (payload.variant === variant) {
       return;
     }
 
+    if (variant === "programming") {
+      onChange({ ...block, title: getTemplate("first-route").title[locale], payload: createProgrammingPayload("first-route", locale) });
+      return;
+    }
     if (variant === "sort") {
       onChange({
         ...block,
@@ -976,7 +986,10 @@ function GameForm({ block, onChange }: FormProps<"game">) {
                   text: pair.left,
                   order: index,
                 }))
-              : payload.items,
+              : payload.variant === "sort" ? payload.items : [
+                { text: locale === "zh" ? "第一步" : "First step", order: 0 },
+                { text: locale === "zh" ? "第二步" : "Second step", order: 1 },
+              ],
         },
       });
       return;
@@ -989,7 +1002,9 @@ function GameForm({ block, onChange }: FormProps<"game">) {
         pairs:
           payload.variant === "sort"
             ? payload.items.map((item) => ({ left: item.text, right: "" }))
-            : payload.pairs,
+            : payload.variant === "match" ? payload.pairs : [
+              { left: "A", right: "A" }, { left: "B", right: "B" },
+            ],
       },
     });
   }
@@ -1000,16 +1015,20 @@ function GameForm({ block, onChange }: FormProps<"game">) {
         <select
           className={SELECT_CLASS}
           onChange={(event) => {
-            switchVariant(event.target.value === "match" ? "match" : "sort");
+            switchVariant(event.target.value === "programming" ? "programming" : event.target.value === "match" ? "match" : "sort");
           }}
           value={payload.variant}
         >
           <option value="sort">{t("editor.game.sort")}</option>
           <option value="match">{t("editor.game.match")}</option>
+          <option value="programming">{m.programmingVariant}</option>
         </select>
       </Field>
 
-      {payload.variant === "sort" ? (
+      {payload.variant === "programming" ? (
+        <ProgrammingForm payload={payload} onChange={(next) => onChange({ ...block, payload: next })}
+          onPreset={(next, title) => onChange({ ...block, title, payload: next })} />
+      ) : payload.variant === "sort" ? (
         <div className="space-y-1.5">
           <p className="text-xs font-medium">{t("editor.game.items")}</p>
           {sortedItems.map((item, index) => (

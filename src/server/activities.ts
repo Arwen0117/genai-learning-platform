@@ -8,6 +8,8 @@ import {
   gradeActivity,
 } from "@/lib/blocks/activity-result";
 import { prisma } from "@/lib/prisma";
+import { programmingVersion } from "@/lib/programming-game/config";
+import type { ActivityGrade } from "@/lib/blocks/activity-result";
 
 export async function submitActivity(
   lessonId: string,
@@ -23,7 +25,22 @@ export async function submitActivity(
     // A teacher preview is read-only: never create ActivityAttempt or
     // LessonProgress rows while the teacher is looking at the course.
     if (access.preview) return { ok: true as const, id: null };
+    // Authorization precedes deduplication. A saved retry returns its original
+    // grade even when the teacher has subsequently changed the level.
+    const existing = await prisma.activityAttempt.findUnique({
+      where: { userId_lessonId_blockId_attemptId: {
+        userId: access.userId, lessonId, blockId, attemptId: parsed.attemptId,
+      } },
+    });
+    if (existing) return { ok: true as const, id: existing.id, grade: savedGrade(existing.result) };
+    const programming = access.block.type === "game" && access.block.payload.variant === "programming";
+    if (access.block.type === "game" && access.block.payload.variant === "programming") {
+      const version = await programmingVersion(access.block.payload);
+      if (parsed.answer.levelVersion !== version)
+        return { ok: false as const, code: "LEVEL_CHANGED" as const, error: "Level updated. Reload before submitting; keep a copy of your program." };
+    }
     const grade = gradeActivity(access.block, parsed.answer);
+    if (programming) grade.feedback.levelVersion = parsed.answer.levelVersion;
     const attempt = await persistActivity({
       ...access,
       courseId: access.courseId!,
@@ -32,7 +49,7 @@ export async function submitActivity(
       answer: parsed.answer,
       grade,
     });
-    return { ok: true as const, id: attempt.id };
+    return { ok: true as const, id: attempt.id, grade: savedGrade(attempt.result) };
   } catch (cause) {
     return {
       ok: false as const,
@@ -76,4 +93,10 @@ export async function loadActivityAttempts(
       error: cause instanceof Error ? cause.message : "Cannot load history.",
     };
   }
+}
+
+/** Only expose the stored grade; identity and snapshot remain in private history. */
+function savedGrade(result: unknown): ActivityGrade {
+  const r = result as ActivityGrade;
+  return { score: r.score, completed: r.completed, passed: r.passed, verification: r.verification, feedback: r.feedback };
 }

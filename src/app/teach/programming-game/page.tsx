@@ -12,7 +12,7 @@ async function TeacherWorkshop() {
     redirect("/login?callbackUrl=%2Fteach%2Fprogramming-game");
   if (session.user.role !== "INSTRUCTOR" && session.user.role !== "ADMIN")
     redirect("/");
-  return <ProgrammingGameLab />;
+  return <ProgrammingGameLab teacherId={session.user.id} />;
 }
 
 /** Development workshop with real server-side authorization and no writes.

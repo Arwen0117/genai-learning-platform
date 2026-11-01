@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/i18n/client";
+import { ProgrammingAttemptSummary } from "./programming-game/ProgrammingAttemptSummary";
 import { loadActivityAttempts } from "@/server/activities";
 type Row = { id: string; createdAt: string; result: unknown };
 export function AttemptHistory({
@@ -74,6 +75,7 @@ export function AttemptHistory({
               ·{" "}
               {result.completed ? t("common.completed") : t("activity.attempt")}
             </summary>
+            {result.feedback && typeof result.feedback === "object" && "variant" in result.feedback && result.feedback.variant === "programming" ? <ProgrammingAttemptSummary result={row.result} /> : <>
             <p className="mt-2 font-medium">{t("activity.answer")}</p>
             <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words">
               {JSON.stringify(result.answer, null, 2)}
@@ -82,6 +84,7 @@ export function AttemptHistory({
             <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words">
               {JSON.stringify(result.feedback, null, 2)}
             </pre>
+            </>}
           </details>
         );
       })}

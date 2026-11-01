@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { programmingPayloadSchema } from "@/lib/programming-game/config";
 
 /**
  * Single source of truth for lesson blocks (docs/plan/01 §3).
@@ -194,13 +195,14 @@ const matchGamePayloadSchema = z.object({
   pairs: z.array(matchPairSchema).min(2),
 });
 
-/** `game` — either an ordering puzzle or a matching puzzle. */
+/** `game` — ordering, matching or a teacher-authored programming challenge. */
 export const gameBlockSchema = blockBaseSchema
   .extend({
     type: z.literal("game"),
     payload: z.discriminatedUnion("variant", [
       sortGamePayloadSchema,
       matchGamePayloadSchema,
+      programmingPayloadSchema,
     ]),
   })
   .refine(

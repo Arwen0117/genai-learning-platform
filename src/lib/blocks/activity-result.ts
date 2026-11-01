@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { executeProgram, LIMITS } from "@/lib/programming-game/engine";
+import { programmingLevel } from "@/lib/programming-game/config";
 import type { Block } from "./schema";
 import { gradeQuiz, type QuizResponses } from "./scoring";
 
@@ -160,6 +162,21 @@ export function gradeActivity(
     }
     case "game": {
       const p = block.payload;
+      if (p.variant === "programming") {
+        const run = executeProgram(programmingLevel(p), answer.program);
+        const passed = run.status === "passed";
+        return {
+          ...base,
+          score: normalizedScore(passed ? 100 : 0, 0, 100),
+          completed: passed, passed, verification: "server",
+          feedback: {
+            variant: "programming", levelSnapshot: run.level, limitsSnapshot: LIMITS, status: run.status, steps: run.steps,
+            nodeCount: run.nodeCount, loopIterations: run.loopIterations,
+            error: run.error, unmet: run.unmet,
+            finalState: { robot: run.robot, item: run.item, holding: run.holding },
+          },
+        };
+      }
       if (p.variant === "sort") {
         const order = z
           .array(z.number().int().nonnegative())
