@@ -61,27 +61,46 @@ export function AttemptHistory({
         const result = row.result as {
           score?: { raw: number; max: number; normalized: number };
           completed?: boolean;
+          activityType?: string;
           answer?: unknown;
           feedback?: unknown;
         };
+        const isGameActivity = result.activityType === "game";
+        const status = result.completed
+          ? t("common.completed")
+          : t("activity.attempt");
+        const answer = result.answer as { kind?: unknown } | undefined;
+        const hasCorrection =
+          result.completed === true && result.feedback !== undefined;
         return (
           <details key={row.id} className="rounded-lg border p-2 text-xs">
             <summary className="cursor-pointer">
               {new Date(row.createdAt).toLocaleString()} ·{" "}
-              {result.score
+              {isGameActivity ? status : result.score
                 ? `${Math.round(result.score.normalized * 100)}% (${result.score.raw}/${result.score.max})`
                 : t("activity.ungraded")}{" "}
-              ·{" "}
-              {result.completed ? t("common.completed") : t("activity.attempt")}
+              {isGameActivity ? null : `· ${status}`}
             </summary>
-            <p className="mt-2 font-medium">{t("activity.answer")}</p>
-            <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words">
-              {JSON.stringify(result.answer, null, 2)}
-            </pre>
-            <p className="mt-2 font-medium">{t("activity.feedback")}</p>
-            <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words">
-              {JSON.stringify(result.feedback, null, 2)}
-            </pre>
+            {isGameActivity ? (
+              <p className="mt-2 text-muted-foreground">
+                {answer?.kind === "hint"
+                  ? t("activity.gameHintUsed")
+                  : hasCorrection
+                    ? t("activity.gameFeedbackRecorded")
+                    : t("activity.gameAnswerRecorded")}
+              </p>
+            ) : (
+              <>
+                <p className="mt-2 font-medium">{t("activity.answer")}</p>
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words">
+                  {JSON.stringify(result.answer, null, 2)}
+                </pre>
+                <p className="mt-2 font-medium">{t("activity.feedback")}</p>
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words">
+                  {JSON.stringify(result.feedback, null, 2)}
+                </pre>
+              </>
+            )}
           </details>
         );
       })}

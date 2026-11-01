@@ -178,9 +178,16 @@ export function gradeActivity(
           ...base,
           score: normalizedScore(correct, 0, order.length),
           passed: correct === order.length,
-          completed: correct === order.length,
+          completed: true,
           verification: "server",
-          feedback: { correct, total: order.length },
+          feedback: {
+            correct,
+            total: order.length,
+            correction:
+              correct === order.length
+                ? null
+                : { expected },
+          },
         };
       }
       if (p.variant === "match") {
@@ -206,13 +213,17 @@ export function gradeActivity(
         return {
           ...base,
           score: normalizedScore(matched.size, 0, p.pairs.length),
-          completed: matched.size === p.pairs.length,
+          completed: true,
           passed: matched.size === p.pairs.length,
           verification: "server",
           feedback: {
             correct: matched.size,
             total: p.pairs.length,
             attempts: choices.length,
+            correction:
+              matched.size === p.pairs.length
+                ? null
+                : { expected: p.pairs.map((_, index) => index) },
           },
         };
       }
@@ -225,10 +236,16 @@ export function gradeActivity(
       const correct = p.options[option]?.correct === true;
       return {
         ...base,
-        completed: correct,
+        completed: true,
         passed: correct,
         verification: "server",
-        feedback: { correct, selected: option },
+        feedback: {
+          correct,
+          selected: option,
+          correction: correct
+            ? null
+            : { answer: p.options.find((item) => item.correct)?.text ?? "" },
+        },
       };
     }
     case "reflection": {
