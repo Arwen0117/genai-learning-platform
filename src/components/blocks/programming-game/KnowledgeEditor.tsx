@@ -16,7 +16,7 @@ type Props = {
   onChange: (cards: KnowledgeCard[]) => void;
   teacherId?: string;
   templateId?: TemplateId;
-  mode?: "workshop" | "course";
+  mode?: "workshop" | "course" | "embedded";
   locale: "en" | "zh";
 };
 

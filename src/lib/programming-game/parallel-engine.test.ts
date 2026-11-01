@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   PARALLEL_COMMANDS,
+  PARALLEL_ACTIONS,
   PARALLEL_LIMITS,
   createParallelExecution,
   executeParallelProgram,
@@ -225,7 +226,7 @@ describe("simultaneous collision resolution", () => {
   });
   it("preserves exclusivity and order independence for every four-robot action combination", () => {
     // Exhaust the 6^4 one-tick combinations at this densely occupied layout.
-    const p: ParallelProgram = PARALLEL_COMMANDS.filter((op) => op !== "repeat").map((op) => ({ op }));
+    const p: ParallelProgram = PARALLEL_ACTIONS.map((op) => ({ op }));
     for (let code = 0; code < 6 ** 4; code++) {
       const cursors = Array.from({ length: 4 }, (_, i) => Math.floor(code / 6 ** i) % 6);
       const base = snapshot([{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 1 }, { x: 1, y: 1 }], p, cursors);
@@ -295,7 +296,7 @@ describe("bounded evaluation and untrusted input", () => {
   });
   it.each([
     { rulesVersion: 1 }, { rulesVersion: 3 }, { width: 13 }, { height: 0 },
-    { robots: [] }, { robots: [{ id: "a", start: { x: 0, y: 0 } }] },
+    { robots: [] }, { robots: [{ id: "a", start: { x: -1, y: 0 } }] },
     { robots: Array.from({ length: 5 }, (_, i) => ({ id: String(i), start: { x: i, y: 0 } })) },
     { robots: [{ id: "a", start: { x: 0, y: 0 } }, { id: "a", start: { x: 1, y: 0 } }] },
     { robots: [{ id: "a", start: { x: 0, y: 0 } }, { id: "b", start: { x: 0, y: 0 } }] },
@@ -303,7 +304,7 @@ describe("bounded evaluation and untrusted input", () => {
     { walls: [{ x: 0, y: 0 }] }, { walls: [{ x: 4, y: 0 }] },
     { walls: [{ x: 2, y: 1 }, { x: 2, y: 1 }] },
     { robots: [{ id: "bad id", start: { x: 0, y: 0 } }, { id: "b", start: { x: 1, y: 0 } }] },
-    { allowed: [] }, { allowed: ["wait", "wait"] }, { allowed: ["if"] },
+    { allowed: [] }, { allowed: ["wait", "wait"] }, { allowed: ["teleport"] },
   ])("rejects invalid parallel level %j", (p) => {
     expect(() => parseParallelLevel({ ...level(), ...p })).toThrow();
   });

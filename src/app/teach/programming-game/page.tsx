@@ -20,7 +20,7 @@ async function TeacherWorkshop() {
  */
 export default function ProgrammingGameWorkshopPage() {
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
+    <main className="mx-auto w-full max-w-[1800px] flex-1 px-4 py-8">
       <Suspense fallback={<p role="status">Loading…</p>}>
         <TeacherWorkshop />
       </Suspense>

@@ -1,17 +1,29 @@
 import { GameInputError, type Point } from "./engine";
 
-/** Rules v2, batch B1. Pure, bounded simulation; never accepts a client runtime
+/** Rules v2, including opt-in local IF observations. Pure, bounded simulation;
+ * never accepts a client runtime
  * as grading evidence. v1 engine/player and their counters remain unchanged.
- * IF, items and messages are intentionally not accepted in this batch.
+ * Items, variables and messages are not accepted. Existing B1 actions keep
+ * their meaning; IF must be explicitly allowed by the authoritative level.
  */
 export const PARALLEL_LIMITS = Object.freeze({
   size: 12, robots: 4, nodes: 80, repeat: 20, ticks: 1000, attempts: 4000,
 });
 export const PARALLEL_ACTIONS = ["up", "down", "left", "right", "wait", "end"] as const;
-export const PARALLEL_COMMANDS = [...PARALLEL_ACTIONS, "repeat"] as const;
+export const PARALLEL_COMMANDS = [...PARALLEL_ACTIONS, "repeat", "if", "label", "jump"] as const;
 export type ParallelAction = (typeof PARALLEL_ACTIONS)[number];
+export type ParallelDirection = "up" | "down" | "left" | "right";
+export type ParallelCondition =
+  | { kind: "goal"; not: boolean }
+  | { kind: "wall" | "boundary" | "robot"; direction: ParallelDirection; not: boolean };
 export type ParallelCommand = { op: ParallelAction } | {
-  op: "repeat"; count: number; body: { op: ParallelAction }[];
+  op: "label"; id: string;
+} | {
+  op: "jump"; target: string;
+} | {
+  op: "repeat"; count: number; body: ParallelProgram;
+} | {
+  op: "if"; condition: ParallelCondition; then: ParallelProgram; else: ParallelProgram;
 };
 export type ParallelProgram = ParallelCommand[];
 export type ParallelLevel = {
@@ -26,7 +38,12 @@ export type ParallelLevel = {
   allowed: (typeof PARALLEL_COMMANDS)[number][];
 };
 export type ParallelLocation = { path: number[]; iteration: number | null };
-export type ParallelInstruction = ParallelLocation & { op: ParallelAction };
+export type ParallelInstruction = ParallelLocation & { loopStart?: boolean; next?: number } & (
+  { op: ParallelAction } |
+  { op: "label"; id: string } |
+  { op: "jump"; target: string; jumpTo: number } |
+  { op: "if"; condition: ParallelCondition; trueNext: number; falseNext: number }
+);
 export type ParallelBlocked = {
   reason: "CONTENDED" | "OCCUPIED" | "CYCLE";
   robotIds: string[];
@@ -46,6 +63,7 @@ export type ParallelRobot = {
   attempts: number;
   successfulMoves: number;
   loopIterations: number;
+  decision?: { tick: number; result: boolean; condition: ParallelCondition; at: ParallelLocation };
 };
 export type ParallelBudgets = { ticks: number; attempts: number };
 export type ParallelExecution = {
@@ -102,7 +120,7 @@ export function parseParallelLevel(input: unknown): ParallelLevel {
     return result;
   }
   const walls = points(p.walls, 0, "INVALID_WALLS");
-  if (!Array.isArray(p.robots) || p.robots.length < 2 || p.robots.length > PARALLEL_LIMITS.robots) reject("INVALID_ROBOTS");
+  if (!Array.isArray(p.robots) || p.robots.length < 1 || p.robots.length > PARALLEL_LIMITS.robots) reject("INVALID_ROBOTS");
   const robots = p.robots.map((value) => {
     const r = object(value);
     if (typeof r.id !== "string" || !/^[a-zA-Z0-9_-]{1,40}$/.test(r.id)) reject("INVALID_ROBOT_ID");
@@ -122,33 +140,101 @@ export function parseParallelLevel(input: unknown): ParallelLevel {
 export function parseParallelProgram(input: unknown, level: ParallelLevel): ParallelProgram {
   if (!Array.isArray(input) || !input.length || input.length > PARALLEL_LIMITS.nodes) reject("INVALID_PROGRAM_SIZE");
   let nodes = 0;
-  function action(input: unknown): { op: ParallelAction } {
+  const labels = new Set<string>();
+  const targets: string[] = [];
+  function action(input: unknown): ParallelCommand {
+    if (++nodes > PARALLEL_LIMITS.nodes) reject("TOO_MANY_NODES");
     const p = object(input);
+    if (p.op === "jump") {
+      if (!level.allowed.includes("jump")) reject("DISALLOWED_JUMP");
+      if (!validLabel(p.target)) reject("INVALID_JUMP_TARGET");
+      targets.push(p.target); return { op: "jump", target: p.target };
+    }
     if (!(PARALLEL_ACTIONS as readonly unknown[]).includes(p.op)) reject("INVALID_ACTION");
     if (!level.allowed.includes(p.op as ParallelAction)) reject("DISALLOWED_ACTION");
     return { op: p.op as ParallelAction };
   }
-  return input.map((value) => {
+  function branch(input: unknown, nonempty: boolean): ParallelProgram {
+    if (!Array.isArray(input) || (nonempty && !input.length) || input.length > PARALLEL_LIMITS.nodes)
+      reject(nonempty ? "INVALID_THEN_BODY" : "INVALID_ELSE_BODY");
+    // C1 arms contain actions only. No recursive parsing of untrusted trees.
+    return input.map(action);
+  }
+  function conditional(p: Record<string, unknown>): ParallelCommand {
     if (++nodes > PARALLEL_LIMITS.nodes) reject("TOO_MANY_NODES");
+    if (!level.allowed.includes("if")) reject("DISALLOWED_IF");
+    const c = objectCondition(p.condition);
+    return { op: "if", condition: c, then: branch(p.then, true), else: branch(p.else, false) };
+  }
+  const program: ParallelProgram = input.map((value) => {
     const p = object(value);
+    if (p.op === "label") {
+      if (++nodes > PARALLEL_LIMITS.nodes) reject("TOO_MANY_NODES");
+      if (!level.allowed.includes("label")) reject("DISALLOWED_LABEL");
+      if (!validLabel(p.id)) reject("INVALID_LABEL");
+      if (labels.has(p.id)) reject("DUPLICATE_LABEL");
+      labels.add(p.id); return { op: "label", id: p.id };
+    }
+    if (p.op === "if") return conditional(p);
     if (p.op !== "repeat") return action(p);
+    if (++nodes > PARALLEL_LIMITS.nodes) reject("TOO_MANY_NODES");
     if (!level.allowed.includes("repeat")) reject("DISALLOWED_REPEAT");
     const count = integer(p.count, 1, PARALLEL_LIMITS.repeat, "INVALID_REPEAT_COUNT");
     if (!Array.isArray(p.body) || !p.body.length || p.body.length > PARALLEL_LIMITS.nodes) reject("INVALID_LOOP_BODY");
-    nodes += p.body.length;
-    if (nodes > PARALLEL_LIMITS.nodes) reject("TOO_MANY_NODES");
-    // No recursion: nested, cyclic and future instruction types are rejected.
-    return { op: "repeat", count, body: p.body.map(action) };
+    return { op: "repeat", count, body: p.body.map((value) => {
+      const child = object(value);
+      return child.op === "if" ? conditional(child) : action(child);
+    }) };
   });
+  for (const target of targets) if (!labels.has(target)) reject("MISSING_JUMP_TARGET");
+  return program;
+}
+
+function validLabel(input: unknown): input is string {
+  return typeof input === "string" && /^[A-Z][A-Z0-9_]{0,15}$/.test(input);
+}
+
+function objectCondition(input: unknown): ParallelCondition {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) reject("INVALID_CONDITION");
+  const p = input as Record<string, unknown>;
+  if (typeof p.not !== "boolean") reject("INVALID_CONDITION");
+  if (p.kind === "goal") return { kind: "goal", not: p.not };
+  if (!["wall", "boundary", "robot"].includes(p.kind as string) ||
+      !["up", "down", "left", "right"].includes(p.direction as string)) reject("INVALID_CONDITION");
+  return { kind: p.kind as "wall" | "boundary" | "robot", direction: p.direction as ParallelDirection, not: p.not };
+}
+
+/** Counts a trusted, bounded editor/parsed tree, including both IF arms. */
+export function countParallelProgramNodes(program: ParallelProgram): number {
+  return program.reduce((n, c) => n + 1 + (c.op === "repeat" ? countParallelProgramNodes(c.body)
+    : c.op === "if" ? countParallelProgramNodes(c.then) + countParallelProgramNodes(c.else) : 0), 0);
 }
 
 function compile(program: ParallelProgram): ParallelInstruction[] {
   const result: ParallelInstruction[] = [];
-  program.forEach((c, index) => {
-    if (c.op !== "repeat") result.push({ op: c.op, path: [index], iteration: null });
-    else for (let iteration = 1; iteration <= c.count; iteration++)
-      c.body.forEach((a, child) => result.push({ op: a.op, path: [index, child], iteration }));
-  });
+  const labels = new Map<string, number>();
+  function emit(list: ParallelProgram, prefix: number[], iteration: number | null) {
+    list.forEach((c, index) => {
+      const path = [...prefix, index];
+      if (c.op === "repeat") {
+        for (let i = 1; i <= c.count; i++) {
+          const start = result.length; emit(c.body, path, i); result[start].loopStart = true;
+        }
+      } else if (c.op === "if") {
+        const judge: ParallelInstruction = { op: "if", condition: c.condition, path, iteration, trueNext: result.length + 1, falseNext: 0 };
+        result.push(judge); emit(c.then, [...path, 0], iteration);
+        const lastThen = result[result.length - 1];
+        judge.falseNext = result.length; emit(c.else, [...path, 1], iteration);
+        // Arms contain only actions. Skip ELSE via a zero-cost continuation.
+        if (lastThen.op !== "if") lastThen.next = result.length;
+      } else if (c.op === "label") {
+        labels.set(c.id, result.length); result.push({ op: "label", id: c.id, path, iteration });
+      } else if (c.op === "jump") result.push({ op: "jump", target: c.target, jumpTo: -1, path, iteration });
+      else result.push({ op: c.op, path, iteration });
+    });
+  }
+  emit(program, [], null);
+  for (const instruction of result) if (instruction.op === "jump") instruction.jumpTo = labels.get(instruction.target)!;
   // <= (80 - 1) * 20 = 1580 shared instructions, not per-robot copies.
   return result;
 }
@@ -173,7 +259,7 @@ export function createParallelExecution(levelInput: unknown, programInput: unkno
       blocked: null, error: null, attempts: 0, successfulMoves: 0, loopIterations: 0,
     })),
     worldTicks: 0, instructionAttempts: 0, successfulMoves: 0,
-    nodeCount: program.reduce((n, c) => n + 1 + (c.op === "repeat" ? c.body.length : 0), 0),
+    nodeCount: countParallelProgramNodes(program),
     status: "ready", failure: null, errors: [], unmetRobotIds: [],
   };
 }
@@ -223,6 +309,22 @@ const DELTAS = {
   left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
 } as const;
 
+/** Read only the supplied tick-start snapshot. No global IDs, coordinates,
+ * memory, boolean expression trees or lookahead are exposed to programs.
+ */
+export function observeParallelCondition(level: ParallelLevel, robots: ParallelRobot[], robot: ParallelRobot, condition: ParallelCondition): boolean {
+  let value: boolean;
+  if (condition.kind === "goal") value = level.goals.some((g) => key(g) === key(robot.position));
+  else {
+    const delta = DELTAS[condition.direction];
+    const target = { x: robot.position.x + delta.x, y: robot.position.y + delta.y };
+    value = condition.kind === "boundary" ? target.x < 0 || target.x >= level.width || target.y < 0 || target.y >= level.height
+      : condition.kind === "wall" ? level.walls.some((w) => key(w) === key(target))
+      : robots.some((r) => r.id !== robot.id && key(r.position) === key(target));
+  }
+  return condition.not ? !value : value;
+}
+
 /** One WORLD tick. This consumes only a trusted, created runtime; authoritative
  * execution accepts level/program and always reconstructs initial state.
  * Earlier snapshots are never mutated. Terminal states are idempotent.
@@ -243,7 +345,7 @@ export function stepParallelExecution(current: ParallelExecution): ParallelExecu
   const errors: ParallelRuntimeError[] = [];
   for (const robot of active) {
     const instruction = current.instructions[robot.cursor];
-    if (instruction.op === "wait" || instruction.op === "end") continue;
+    if (instruction.op === "wait" || instruction.op === "end" || instruction.op === "if" || instruction.op === "label" || instruction.op === "jump") continue;
     const delta = DELTAS[instruction.op];
     const target = { x: robot.position.x + delta.x, y: robot.position.y + delta.y };
     const code = target.x < 0 || target.y < 0 || target.x >= current.level.width || target.y >= current.level.height
@@ -259,13 +361,17 @@ export function stepParallelExecution(current: ParallelExecution): ParallelExecu
     const resolution = resolved.get(robot.id);
     const moved = resolution?.moves === true;
     const blocked = resolution && !resolution.moves ? resolution.blocked : null;
-    const cursor = robot.cursor + (blocked || error ? 0 : 1);
+    const result = instruction.op === "if" ? observeParallelCondition(current.level, ordered, robot, instruction.condition) : null;
+    const cursor = blocked || error ? robot.cursor : instruction.op === "if" ? (result ? instruction.trueNext : instruction.falseNext)
+      : instruction.op === "jump" ? instruction.jumpTo
+      : instruction.next ?? robot.cursor + 1;
     return {
       ...robot, cursor, position: moved ? { ...moves.get(robot.id)!.target } : { ...robot.position },
       status: error ? "error" : blocked ? "blocked" : instruction.op === "end" || cursor === current.instructions.length ? "ended" : "ready",
       last: { path: [...instruction.path], iteration: instruction.iteration }, blocked, error,
       attempts: robot.attempts + 1, successfulMoves: robot.successfulMoves + Number(moved),
-      loopIterations: robot.loopIterations + Number(instruction.iteration !== null && instruction.path[1] === 0 && robot.status !== "blocked"),
+      loopIterations: robot.loopIterations + Number(instruction.loopStart === true && robot.status !== "blocked"),
+      ...(instruction.op === "if" ? { decision: { tick, result: result!, condition: { ...instruction.condition }, at: { path: [...instruction.path], iteration: instruction.iteration } } } : {}),
     };
   });
   const next: ParallelExecution = {
