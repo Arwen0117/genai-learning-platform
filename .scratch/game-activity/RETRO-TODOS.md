@@ -95,7 +95,7 @@ complete.
 
 ### 4. Add activity-level editor authoring
 
-- **Status:** [~]
+- **Status:** [x]
 - **Blocked by:** 1 and 2
 - **Finding:** The editor is still block-oriented and does not expose a first-class Game Activity with ordered Challenges and activity-level settings.
 - **Work:**
@@ -104,9 +104,11 @@ complete.
   - Surface validation errors at the activity and Challenge level.
   - Preserve instructor review before publication.
 - **Done when:** An instructor can fully review and edit a generated Game Activity without manipulating five unrelated game blocks.
-- **Progress:** The editor now loads, validates, preserves, and saves the
-  Game Activity container, and published-content checks count it as lesson
-  content. Challenge authoring controls and ordering remain pending.
+- **Progress:** The editor loads, validates, preserves, and saves the Game
+  Activity container, and published-content checks count it as lesson content.
+  The activity panel edits the activity title, selects Challenges for the
+  existing Challenge forms, and supports Challenge ordering, duplication, and
+  deletion with visible activity-level validation errors.
 
 ### 5. Remove learner-facing numeric game scores
 - **Status:** [~]

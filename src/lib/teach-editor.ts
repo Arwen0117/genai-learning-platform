@@ -193,17 +193,31 @@ export const editorCourseSchema = z
           if (activity === undefined) continue;
           const result = validateGameActivity(activity, course.language);
           if (!result.ok) {
+            const activityPath: PropertyKey[] = [
+              "modules",
+              moduleIndex,
+              "lessons",
+              lessonIndex,
+              "gameActivity",
+            ];
             ctx.addIssue({
               code: "custom",
-              path: [
-                "modules",
-                moduleIndex,
-                "lessons",
-                lessonIndex,
-                "blocks",
-              ],
+              path: activityPath,
               message: result.errors.join(" "),
             });
+            for (const error of result.errors) {
+              const challengeNumber = /^Challenge (\d+)/u.exec(error)?.[1];
+              if (challengeNumber === undefined) continue;
+              ctx.addIssue({
+                code: "custom",
+                path: [
+                  ...activityPath,
+                  "challenges",
+                  Number(challengeNumber) - 1,
+                ],
+                message: error,
+              });
+            }
           }
         }
       }
