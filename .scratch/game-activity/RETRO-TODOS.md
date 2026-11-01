@@ -8,6 +8,13 @@ Status values:
 - `[~]` In progress
 - `[x]` Complete
 
+## Current progress
+
+Four of the fourteen follow-up tasks have been completed. Tasks 5 and 12
+remain in progress because the learner-facing history still needs richer
+qualitative Game Activity details, and GitHub branch protection must still
+make the verification workflow a required check. Tasks 13 and 14 are complete.
+
 ## Implementation backlog
 
 ### 1. Replace independent game blocks with one Game Activity
@@ -60,7 +67,7 @@ Status values:
 - **Done when:** An instructor can fully review and edit a generated Game Activity without manipulating five unrelated game blocks.
 
 ### 5. Remove learner-facing numeric game scores
-- **Status:** [x]
+- **Status:** [~]
 - **Blocked by:** 2
 - **Finding:** The agreed design defers numeric scores, but shared activity history renders percentages and raw/max scores.
 - **Work:**
@@ -68,6 +75,9 @@ Status values:
   - Hide numeric score, percentage, and raw/max score from learner-facing Game Activity history.
   - Show progress, completion, Correction, Hint state, and qualitative feedback instead.
 - **Done when:** Learners never see numeric scoring for Game Activities.
+- **Progress:** Numeric scores are hidden from the Game Activity history summary
+  and raw grading JSON is hidden, but the history still needs dedicated
+  progress, Correction, and Hint presentation.
 
 ### 6. Establish explicit published content versions
 
@@ -146,13 +156,15 @@ Status values:
 ## Environment and guardrail backlog
 
 ### 12. Add continuous integration for the existing verification command
-- **Status:** [x]
+- **Status:** [~]
 - **Blocked by:** None
 - **Finding:** `package.json` provides `npm run verify`, but no visible CI workflow runs linting, type checking, tests, and the production build.
 - **Work:**
   - Run `npm run verify` on pull requests and the main branch.
   - Report failures as required checks.
 - **Done when:** A pull request cannot merge without the repository’s existing verification command passing.
+- **Progress:** `.github/workflows/verify.yml` runs `npm run verify`; configure
+  the workflow as a required branch-protection check in GitHub.
 
 ### 13. Add a lightweight pre-commit guardrail
 - **Status:** [x]
