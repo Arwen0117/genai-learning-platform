@@ -62,8 +62,9 @@ export function AttemptHistory({
           score?: { raw: number; max: number; normalized: number };
           completed?: boolean;
           activityType?: string;
+          attemptNumber?: number;
           answer?: unknown;
-          feedback?: unknown;
+          feedback?: { correction?: unknown; kind?: unknown };
         };
         const isGameActivity = result.activityType === "game";
         const status = result.completed
@@ -71,7 +72,8 @@ export function AttemptHistory({
           : t("activity.attempt");
         const answer = result.answer as { kind?: unknown } | undefined;
         const hasCorrection =
-          result.completed === true && result.feedback !== undefined;
+          result.feedback?.correction !== undefined &&
+          result.feedback.correction !== null;
         return (
           <details key={row.id} className="rounded-lg border p-2 text-xs">
             <summary className="cursor-pointer">
@@ -82,13 +84,22 @@ export function AttemptHistory({
               {isGameActivity ? null : `· ${status}`}
             </summary>
             {isGameActivity ? (
-              <p className="mt-2 text-muted-foreground">
-                {answer?.kind === "hint"
-                  ? t("activity.gameHintUsed")
-                  : hasCorrection
-                    ? t("activity.gameFeedbackRecorded")
-                    : t("activity.gameAnswerRecorded")}
-              </p>
+              <div className="mt-2 space-y-1 text-muted-foreground">
+                {typeof result.attemptNumber === "number" ? (
+                  <p>
+                    {t("activity.gameResponse", {
+                      current: result.attemptNumber,
+                    })}
+                  </p>
+                ) : null}
+                <p>
+                  {answer?.kind === "hint"
+                    ? t("activity.gameHintUsed")
+                    : hasCorrection
+                      ? t("activity.gameCorrectionRecorded")
+                      : t("activity.gameAnswerRecorded")}
+                </p>
+              </div>
             ) : (
               <>
                 <p className="mt-2 font-medium">{t("activity.answer")}</p>

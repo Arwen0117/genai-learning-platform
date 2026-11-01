@@ -77,7 +77,10 @@ make the verification workflow a required check. Tasks 13 and 14 are complete.
 - **Done when:** Learners never see numeric scoring for Game Activities.
 - **Progress:** Numeric scores are hidden from the Game Activity history summary
   and raw grading JSON is hidden, but the history still needs dedicated
-  progress, Correction, and Hint presentation.
+  progress, Correction, and Hint presentation. The history now presents
+  Correction and Hint states qualitatively and labels persisted response
+  counts as Playthrough history; true ordered Challenge progress remains
+  blocked on the Game Activity container.
 
 ### 6. Establish explicit published content versions
 
