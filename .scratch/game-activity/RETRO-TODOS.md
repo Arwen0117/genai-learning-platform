@@ -38,10 +38,10 @@ complete.
   Activity generation now returns that container and validates it. Generated
   lesson results now preserve it as `gameActivity` instead of flattening its
   Challenges into legacy blocks, and instructor draft persistence now stores
-  the container separately; editor and learner rendering still require
-  migration. The learner lesson page now loads the persisted container,
+  the container separately. The learner lesson page now loads the persisted container,
   renders its ordered Challenges inside one Game Activity boundary, and counts
-  those Challenges in lesson progress; editor migration remains.
+  those Challenges in lesson progress. The editor now preserves and validates
+  the container during load/save; full Challenge authoring remains.
 
 ### 2. Separate attempted, correct, and completed states
 - **Status:** [~]
