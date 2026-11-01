@@ -28,6 +28,19 @@ function hasLatin(value: string): boolean {
   return /[A-Za-z]/u.test(value);
 }
 
+const technicalTerms =
+  /\b(?:AI|API|Bash|CSS|Docker|Git|GitHub|GraphQL|HTML|HTTP|Java|JavaScript|JSON|Kubernetes|Markdown|Next\.js|Node\.js|npm|Python|React|SQL|TypeScript|URL)\b/giu;
+const technicalIdentifier = /\b[A-Za-z]+(?:[A-Z][A-Za-z]+|[_-][A-Za-z0-9]+|\d)[A-Za-z0-9_-]*\b/gu;
+
+function localeText(value: string): string {
+  return value
+    .replace(/https?:\/\/\S+/gu, " ")
+    .replace(/`[^`]*`/gu, " ")
+    .replace(/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/gu, " ")
+    .replace(technicalTerms, " ")
+    .replace(technicalIdentifier, " ");
+}
+
 function stringsFor(block: GameBlock): string[] {
   const payload = block.payload;
   const mediaText =
@@ -76,12 +89,12 @@ export function validateGameActivity(
         errors.push(`Challenge ${index + 1} has ambiguous matching keys.`);
     }
 
-      const text = [
+      const text = localeText([
         ...stringsFor(block),
         block.payload.feedback?.correct ?? "",
         block.payload.feedback?.incorrect ?? "",
         block.payload.hint ?? "",
-      ].join(" ");
+      ].join(" "));
       if ((language === "en" && hasChinese(text)) || (language === "zh" && hasLatin(text)))
         errors.push(`Challenge ${index + 1} does not match the lesson locale.`);
       if (/(?:click|color|colour|audio-only|sound-only)/iu.test(text))

@@ -126,8 +126,7 @@ protection must still make the verification workflow a required check. Tasks
 - **Done when:** Approved Supporting media can be safely published and rejected media cannot enter a learner-facing activity.
 
 ### 9. Replace heuristic locale checks with explicit content-language validation
-
-- **Status:** [ ]
+- **Status:** [~]
 - **Blocked by:** 3
 - **Finding:** Locale validation currently checks only for Chinese and Latin characters, which can reject legitimate technical content or miss other mismatches.
 - **Work:**
@@ -135,6 +134,9 @@ protection must still make the verification workflow a required check. Tasks
   - Define exceptions for identifiers, URLs, code, and technical terminology.
   - Keep mixed-language failures explicit for instructor review.
 - **Done when:** Valid technical content is accepted without weakening detection of unintended mixed-language generated content.
+- **Progress:** Locale validation now ignores approved technical terms,
+  identifiers, URLs, email addresses, and inline code while continuing to
+  reject unintended mixed-language prose.
 
 ### 10. Expand learner behavior tests
 - **Status:** [~]
@@ -154,8 +156,7 @@ protection must still make the verification workflow a required check. Tasks
   Game Activity container and first-class Playthrough model.
 
 ### 11. Update terminology and documentation
-
-- **Status:** [ ]
+- **Status:** [~]
 - **Blocked by:** 1
 - **Finding:** Comments still describe the renderer as dispatching over “the two mini-games,” and some code comments use the earlier block-oriented language.
 - **Work:**
@@ -163,6 +164,9 @@ protection must still make the verification workflow a required check. Tasks
   - Remove stale descriptions of the two-game model.
   - Keep the glossary as the domain-language source of truth.
 - **Done when:** Public comments, types, tests, and docs describe the same domain model.
+- **Progress:** Stale renderer and generation comments now use Game Activity
+  Challenge terminology. Remaining block-oriented types and editor surfaces
+  will be updated with the Game Activity container.
 
 ## Environment and guardrail backlog
 

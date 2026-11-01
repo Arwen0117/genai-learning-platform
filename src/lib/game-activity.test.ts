@@ -82,6 +82,25 @@ describe("game activity validation", () => {
     expect(validateGameActivity(mixed, "en").ok).toBe(false);
   });
 
+  it("allows technical terms, identifiers, URLs, and code in localized content", () => {
+    const activity = mockGameActivity("zh");
+    const first = activity.find(
+      (challenge) => challenge.payload.variant === "choose",
+    );
+    if (!first || first.payload.variant !== "choose")
+      throw new Error("Expected choose");
+    first.payload.prompt =
+      "使用 API v2 和 `useState`，访问 https://example.com/docs。";
+    first.payload.options[0].text = "JSON";
+    first.payload.options[1].text = "Docker 和 GraphQL";
+    first.payload.feedback = {
+      correct: "正确：React 会保留这个状态。",
+      incorrect: "不完全正确，请检查 TypeScript 类型。",
+    };
+
+    expect(validateGameActivity(activity, "zh")).toEqual({ ok: true });
+  });
+
   it("requires approved, moderated, accessible supporting media", () => {
     const activity = mockGameActivity("en");
     activity[0].payload.supportingMedia = {

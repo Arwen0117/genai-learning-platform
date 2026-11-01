@@ -59,7 +59,7 @@ export const generatedLessonSchema = z
     ) {
       ctx.addIssue({
         code: "custom",
-        message: "The middle block must be a flashcards or game block.",
+        message: "The middle block must be a flashcards or Game Activity Challenge.",
         path: ["blocks", 1],
       });
     }

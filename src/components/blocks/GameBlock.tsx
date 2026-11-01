@@ -55,7 +55,7 @@ export type GameRecovery = {
 };
 
 /**
- * Game block: a thin dispatcher over the two mini-games.
+ * Game Activity Challenge dispatcher for the supported interaction formats.
  *
  * It owns the two things the games should not know about — which lesson they
  * belong to and how a finished run is recorded — and hands the puzzle itself
