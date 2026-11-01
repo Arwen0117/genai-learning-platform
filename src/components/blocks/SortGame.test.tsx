@@ -163,6 +163,34 @@ describe("SortGame learner behavior", () => {
     }));
   });
 
+  it("allows completing an attempted Challenge after an incorrect check", () => {
+    const onComplete = vi.fn();
+    const view = render(
+      <I18nProvider locale="en" messages={en}>
+        <SortGame
+          completed={false}
+          items={[
+            { text: "First", order: 0 },
+            { text: "Second", order: 1 },
+          ]}
+          onComplete={onComplete}
+          onFinish={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(
+      within(view.container).getByRole("button", { name: "Check order" }),
+    );
+    const complete = within(view.container).getByRole("button", {
+      name: "Mark as complete",
+    });
+    expect(complete.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(complete);
+
+    expect(onComplete).toHaveBeenCalledOnce();
+  });
+
   it("renders generated feedback and hint guidance", () => {
     const view = render(
       <I18nProvider locale="en" messages={en}>

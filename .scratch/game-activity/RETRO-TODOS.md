@@ -32,8 +32,7 @@ protection must still make the verification workflow a required check. Tasks
 - **Done when:** A learner sees one Game Activity with ordered Challenge progress, and the editor/generator operate on that same model.
 
 ### 2. Separate attempted, correct, and completed states
-
-- **Status:** [ ]
+- **Status:** [~]
 - **Blocked by:** 1
 - **Finding:** Current grading requires a Challenge to be solved correctly before it completes, which conflicts with the agreed rule that learners continue after mistakes and completion follows attempted Challenges.
 - **Work:**
@@ -43,6 +42,10 @@ protection must still make the verification workflow a required check. Tasks
   - Advance to the next Challenge after incorrect submission.
   - Complete the Game Activity after all Challenges are attempted.
 - **Done when:** An incorrect first response is recorded, explained, and does not block activity completion.
+- **Progress:** Sort, Match, and Choose now expose Correction after an
+  incorrect submission and allow the learner to complete the attempted
+  Challenge without a correct retry. Activity-level continuation remains
+  blocked on the Game Activity container.
 
 ### 3. Unify all generation paths around the Game Activity contract
 
@@ -134,8 +137,7 @@ protection must still make the verification workflow a required check. Tasks
 - **Done when:** Valid technical content is accepted without weakening detection of unintended mixed-language generated content.
 
 ### 10. Expand learner behavior tests
-
-- **Status:** [ ]
+- **Status:** [~]
 - **Blocked by:** 1 and 2
 - **Finding:** Sort, Match, and Choose have component tests, but the agreed activity-level behavior is not covered as one external flow.
 - **Work:**
@@ -146,6 +148,10 @@ protection must still make the verification workflow a required check. Tasks
   - Test first-pass versus retry history.
   - Test keyboard, screen-reader announcements, and non-drag interaction paths.
 - **Done when:** The agreed learner behavior is covered through public behavior rather than component internals.
+- **Progress:** Public component tests cover incorrect continuation, Correction,
+  Hint use, Replay, recovery, keyboard movement, and non-drag interaction.
+  Activity-level progression and refresh behavior remain blocked on the
+  Game Activity container and first-class Playthrough model.
 
 ### 11. Update terminology and documentation
 

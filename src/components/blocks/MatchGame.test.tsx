@@ -97,4 +97,37 @@ describe("MatchGame learner behavior", () => {
     }));
     vi.useRealTimers();
   });
+
+  it("allows completing an attempted Challenge after an incorrect match", () => {
+    vi.useFakeTimers();
+    const onComplete = vi.fn();
+    const view = render(
+      <I18nProvider locale="en" messages={en}>
+        <MatchGame
+          completed={false}
+          onComplete={onComplete}
+          onFinish={vi.fn()}
+          pairs={[
+            { left: "One", right: "First" },
+            { left: "Two", right: "Second" },
+          ]}
+        />
+      </I18nProvider>,
+    );
+
+    const left = within(view.container).getByRole("button", { name: "One" });
+    const second = within(view.container).getByRole("button", {
+      name: "Second",
+    });
+    fireEvent.click(left);
+    fireEvent.click(second);
+    const complete = within(view.container).getByRole("button", {
+      name: "Mark as complete",
+    });
+    expect(complete.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(complete);
+
+    expect(onComplete).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
 });

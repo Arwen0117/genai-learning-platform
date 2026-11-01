@@ -95,6 +95,35 @@ describe("ChooseGame learner behavior", () => {
     }));
   });
 
+  it("allows completing an attempted Challenge after an incorrect response", () => {
+    const onComplete = vi.fn();
+    const view = render(
+      <I18nProvider locale="en" messages={en}>
+        <ChooseGame
+          completed={false}
+          onComplete={onComplete}
+          onFinish={vi.fn()}
+          options={[
+            { text: "Distractor", correct: false },
+            { text: "Correct", correct: true },
+          ]}
+          prompt="Pick one"
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(
+      within(view.container).getByRole("button", { name: "Distractor" }),
+    );
+    const complete = within(view.container).getByRole("button", {
+      name: "Mark as complete",
+    });
+    expect(complete.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(complete);
+
+    expect(onComplete).toHaveBeenCalledOnce();
+  });
+
   it("lets instructors edit the prompt and choose exactly one correct option", () => {
     const onChange = vi.fn();
     const block = {

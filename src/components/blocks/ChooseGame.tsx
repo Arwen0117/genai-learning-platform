@@ -207,7 +207,7 @@ export function ChooseGame({
       )}
       <div className="flex flex-wrap items-center gap-3 border-t pt-4">
         <Button
-          disabled={!solved || completed}
+          disabled={attempts === 0 || completed}
           onClick={onComplete}
           variant={completed ? "secondary" : "default"}
         >
@@ -221,7 +221,9 @@ export function ChooseGame({
           )}
         </Button>
         <p className="text-xs text-muted-foreground">
-          {solved || completed ? t("block.choose.done") : t("block.choose.need")}
+          {attempts > 0 || completed
+            ? t("block.choose.done")
+            : t("block.choose.need")}
         </p>
       </div>
     </div>
