@@ -1,6 +1,20 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { blockSchema, type Block } from "@/lib/blocks/schema";
+import { gameActivityContainerSchema } from "@/lib/game-activity";
+
+function storedBlocks(lesson: {
+  blocks: unknown;
+  gameActivity?: unknown;
+}): Block[] {
+  const blocks = Array.isArray(lesson.blocks)
+    ? lesson.blocks
+        .map((b) => blockSchema.safeParse(b))
+        .flatMap((p) => (p.success ? [p.data] : []))
+    : [];
+  const activity = gameActivityContainerSchema.safeParse(lesson.gameActivity);
+  return activity.success ? [...blocks, ...activity.data.challenges] : blocks;
+}
 
 /**
  * Resolves access to one block of a lesson.
@@ -57,11 +71,7 @@ export async function activityAccess(
     )
       throw new Error("You can only preview your own draft courses.");
 
-    const blocks = Array.isArray(lesson.blocks)
-      ? lesson.blocks
-          .map((b) => blockSchema.safeParse(b))
-          .flatMap((p) => (p.success ? [p.data] : []))
-      : [];
+    const blocks = storedBlocks(lesson);
     const block = blocks.find((b) => b.id === blockId);
     if (!block) throw new Error("Activity not found.");
 
@@ -87,11 +97,7 @@ export async function activityAccess(
     throw new Error(
       "Use teacher preview, or enroll as a learner in a published course.",
     );
-  const blocks = Array.isArray(lesson.blocks)
-    ? lesson.blocks
-        .map((b) => blockSchema.safeParse(b))
-        .flatMap((p) => (p.success ? [p.data] : []))
-    : [];
+  const blocks = storedBlocks(lesson);
   const block = blocks.find((b) => b.id === blockId);
   if (!block) throw new Error("Activity not found.");
   return {

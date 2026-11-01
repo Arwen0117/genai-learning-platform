@@ -28,6 +28,7 @@ import { trackEvent } from "@/lib/analytics";
 import { auth } from "@/lib/auth";
 import { applyBlockOverrides } from "@/lib/blocks/override";
 import { blockListSchema } from "@/lib/blocks/schema";
+import { gameActivityContainerSchema } from "@/lib/game-activity";
 import {
   flattenLessons,
   getCourseById,
@@ -143,7 +144,7 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
 
   const lessonRow = await prisma.lesson.findUnique({
     where: { id: lessonId },
-    select: { blocks: true },
+    select: { blocks: true, gameActivity: true },
   });
 
   // Per-learner rewrites (P4.4) are merged in at read time, so the stored lesson
@@ -162,6 +163,14 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
     parsedBlocks.success ? parsedBlocks.data : [],
     overrideRows,
   );
+  const parsedGameActivity = gameActivityContainerSchema.safeParse(
+    lessonRow?.gameActivity,
+  );
+  const gameActivity = parsedGameActivity.success
+    ? parsedGameActivity.data
+    : null;
+  const activityChallenges = gameActivity?.challenges ?? [];
+  const learnerActivities = [...blocks, ...activityChallenges];
 
   // Preview is invisible to analytics: otherwise every teacher preview would
   // look like a learner starting the lesson.
@@ -191,14 +200,21 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
 
   const completedBlocks = progress.get(lessonId)?.completedBlocks ?? [];
   const allBlocksDone =
-    blocks.length > 0 && blocks.every((block) => completedBlocks.includes(block.id));
+    learnerActivities.length > 0 &&
+    learnerActivities.every((block) => completedBlocks.includes(block.id));
   const courseCompleted =
     !canPreview &&
     (enrollment?.completedAt != null ||
       lessons.every((entry) => progress.get(entry.id)?.status === "COMPLETED"));
 
   const lessonRatio =
-    blocks.length === 0 ? 0 : (completedBlocks.length / blocks.length) * 100;
+    learnerActivities.length === 0
+      ? 0
+      : (completedBlocks.filter((id) =>
+          learnerActivities.some((block) => block.id === id),
+        ).length /
+          learnerActivities.length) *
+        100;
 
   // Conversation shown when the tutor drawer opens (P4.3): the last messages of
   // this lesson's session, or an empty list until the learner asks something.
@@ -270,8 +286,10 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
             </Badge>
             <Badge variant="outline">
               {t("lesson.blocks", {
-                completed: completedBlocks.length,
-                total: blocks.length,
+                completed: completedBlocks.filter((id) =>
+                  learnerActivities.some((block) => block.id === id),
+                ).length,
+                total: learnerActivities.length,
               })}
             </Badge>
           </div>
@@ -303,6 +321,36 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
               preview={canPreview}
             />
           ))}
+          {gameActivity ? (
+            <section
+              aria-labelledby={`${gameActivity.id}-title`}
+              className="space-y-4 rounded-xl border border-primary/20 p-4"
+            >
+              <header>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary">
+                  Game Activity
+                </p>
+                <h2
+                  className="mt-1 text-lg font-semibold"
+                  id={`${gameActivity.id}-title`}
+                >
+                  {gameActivity.title}
+                </h2>
+              </header>
+              <div className="space-y-4">
+                {activityChallenges.map((block) => (
+                  <BlockRenderer
+                    block={block}
+                    completed={completedBlocks.includes(block.id)}
+                    courseId={courseId}
+                    key={block.id}
+                    lessonId={lessonId}
+                    preview={canPreview}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
 
         {allBlocksDone ? (

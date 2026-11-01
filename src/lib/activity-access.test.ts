@@ -18,16 +18,45 @@ const block = {
   type: "reading" as const,
   payload: { markdown: "Read" },
 };
+const challenge = {
+  id: "challenge-1",
+  title: "Choose",
+  type: "game" as const,
+  payload: {
+    variant: "choose" as const,
+    prompt: "Pick one",
+    options: [
+      { text: "Correct", correct: true },
+      { text: "Wrong", correct: false },
+      { text: "Also wrong", correct: false },
+    ],
+    feedback: { correct: "Yes", incorrect: "No" },
+  },
+};
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.auth.mockResolvedValue({ user: { id: "u", role: "LEARNER" } });
   mocks.lesson.mockResolvedValue({
     blocks: [block],
+    gameActivity: {
+      id: "activity-1",
+      title: "Practice",
+      challenges: Array.from({ length: 5 }, (_, index) => ({
+        ...challenge,
+        id: `challenge-${index + 1}`,
+      })),
+    },
     module: { course: { id: "c", status: "PUBLISHED" } },
   });
   mocks.enrollment.mockResolvedValue({ userId: "u" });
 });
 describe("activity access / preview isolation", () => {
+  it("authorizes Challenges stored in the Game Activity container", async () => {
+    const access = await activityAccess("l", "challenge-1");
+
+    expect(access.block).toEqual(challenge);
+    expect(access.blocks).toContainEqual(challenge);
+  });
   it("allows an enrolled learner in a published lesson", async () =>
     expect((await activityAccess("l", "b")).preview).toBe(false));
   it("rejects a non-enrolled learner", async () => {

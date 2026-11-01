@@ -39,7 +39,9 @@ complete.
   lesson results now preserve it as `gameActivity` instead of flattening its
   Challenges into legacy blocks, and instructor draft persistence now stores
   the container separately; editor and learner rendering still require
-  migration.
+  migration. The learner lesson page now loads the persisted container,
+  renders its ordered Challenges inside one Game Activity boundary, and counts
+  those Challenges in lesson progress; editor migration remains.
 
 ### 2. Separate attempted, correct, and completed states
 - **Status:** [~]
@@ -77,7 +79,7 @@ complete.
 
 ### 4. Add activity-level editor authoring
 
-- **Status:** [ ]
+- **Status:** [~]
 - **Blocked by:** 1 and 2
 - **Finding:** The editor is still block-oriented and does not expose a first-class Game Activity with ordered Challenges and activity-level settings.
 - **Work:**
@@ -86,6 +88,9 @@ complete.
   - Surface validation errors at the activity and Challenge level.
   - Preserve instructor review before publication.
 - **Done when:** An instructor can fully review and edit a generated Game Activity without manipulating five unrelated game blocks.
+- **Progress:** The editor now loads, validates, preserves, and saves the
+  Game Activity container, and published-content checks count it as lesson
+  content. Challenge authoring controls and ordering remain pending.
 
 ### 5. Remove learner-facing numeric game scores
 - **Status:** [~]

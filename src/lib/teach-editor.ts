@@ -1,7 +1,11 @@
 import { z } from "zod";
 
 import { blockListSchema, type Block } from "@/lib/blocks/schema";
-import { validateGameActivity } from "@/lib/game-activity";
+import {
+  gameActivityContainerSchema,
+  type GameActivityContainer,
+  validateGameActivity,
+} from "@/lib/game-activity";
 import type { ContentLanguage } from "@/lib/llm/language";
 
 /**
@@ -65,6 +69,7 @@ export type EditorLesson = {
   title: string;
   estimatedMinutes: number;
   blocks: Block[];
+  gameActivity?: GameActivityContainer;
   /**
    * Blocks that are stored on the lesson but no longer match the schema. They
    * are left out of `blocks`, so saving replaces them; the editor warns before
@@ -108,6 +113,7 @@ export const editorLessonSchema = z.object({
     .max(120),
   estimatedMinutes: z.number().int().min(1).max(120),
   blocks: blockListSchema,
+  gameActivity: gameActivityContainerSchema.optional(),
 });
 
 export const editorModuleSchema = z.object({
@@ -151,7 +157,10 @@ export const editorCourseSchema = z
       (total, courseModule) =>
         total
         + courseModule.lessons.reduce(
-          (lessonTotal, lesson) => lessonTotal + lesson.blocks.length,
+          (lessonTotal, lesson) =>
+            lessonTotal
+            + lesson.blocks.length
+            + (lesson.gameActivity?.challenges.length ?? 0),
           0,
         ),
       0,
@@ -168,12 +177,21 @@ export const editorCourseSchema = z
     if (course.status === "PUBLISHED") {
       for (const [moduleIndex, courseModule] of course.modules.entries()) {
         for (const [lessonIndex, lesson] of courseModule.lessons.entries()) {
-          const challenges = lesson.blocks.filter(
+          const legacyChallenges = lesson.blocks.filter(
             (block): block is Extract<Block, { type: "game" }> =>
               block.type === "game",
           );
-          if (challenges.length === 0) continue;
-          const result = validateGameActivity(challenges, course.language);
+          const activity = lesson.gameActivity ?? (
+            legacyChallenges.length > 0
+              ? {
+                  id: `legacy-${lesson.id}`,
+                  title: lesson.title,
+                  challenges: legacyChallenges,
+                }
+              : undefined
+          );
+          if (activity === undefined) continue;
+          const result = validateGameActivity(activity, course.language);
           if (!result.ok) {
             ctx.addIssue({
               code: "custom",

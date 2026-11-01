@@ -193,6 +193,9 @@ export async function saveCourse(
               order: lessonIndex,
               estimatedMinutes: lesson.estimatedMinutes,
               blocks: lesson.blocks as unknown as Prisma.InputJsonValue,
+              gameActivity: lesson.gameActivity as
+                | Prisma.InputJsonValue
+                | undefined,
             };
 
             if (existingLessonIds.has(lesson.id)) {

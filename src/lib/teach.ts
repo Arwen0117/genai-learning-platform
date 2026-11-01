@@ -1,6 +1,7 @@
 import type { CourseSource, CourseStatus, Prisma } from "@prisma/client";
 
 import { blockListSchema, blockSchema, type Block } from "@/lib/blocks/schema";
+import { gameActivityContainerSchema } from "@/lib/game-activity";
 import { prisma } from "@/lib/prisma";
 import type {
   EditorCourse,
@@ -123,6 +124,7 @@ const editorCourseSelect = {
           title: true,
           estimatedMinutes: true,
           blocks: true,
+          gameActivity: true,
         },
       },
     },
@@ -191,6 +193,8 @@ export async function loadEditorCourse(
           estimatedMinutes: lesson.estimatedMinutes,
           blocks: parsed.blocks,
           droppedBlocks: parsed.dropped,
+          gameActivity: gameActivityContainerSchema.safeParse(lesson.gameActivity)
+            .data,
         };
       }),
     })),

@@ -298,6 +298,7 @@ function toCourseInput(course: EditorCourse): EditorCourseInput {
         title: lesson.title,
         estimatedMinutes: lesson.estimatedMinutes,
         blocks: lesson.blocks,
+        gameActivity: lesson.gameActivity,
       })),
     })),
   };
