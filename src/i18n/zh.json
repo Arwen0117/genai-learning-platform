@@ -650,6 +650,8 @@
   "lesson.complete.title": "本课完成 🎉",
   "lesson.gameActivity.complete": "游戏活动已完成",
   "lesson.gameActivity.progress": "第 {current} 个挑战，共 {total} 个",
+  "block.renderer.locked": "未解锁",
+  "block.renderer.lockedHint": "请先完成前面的挑战以解锁此挑战。",
   "lesson.courseComplete.body": "你已完成《{title}》。课程已在你学习面板标记为完成。",
   "lesson.courseComplete.title": "课程完成",
   "lesson.metaTitle": "课时",

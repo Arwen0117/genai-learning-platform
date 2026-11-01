@@ -650,6 +650,8 @@
   "lesson.complete.title": "Lesson complete 🎉",
   "lesson.gameActivity.complete": "Game Activity complete",
   "lesson.gameActivity.progress": "Challenge {current} of {total}",
+  "block.renderer.locked": "Locked",
+  "block.renderer.lockedHint": "Complete the earlier Challenges to unlock this one.",
   "lesson.courseComplete.body": "You completed {title}. This course is now marked as finished on your dashboard.",
   "lesson.courseComplete.title": "Course complete",
   "lesson.metaTitle": "Lesson",

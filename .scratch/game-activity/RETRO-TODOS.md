@@ -45,7 +45,8 @@ complete.
   progression helper now derives the next ordered Challenge and activity
   completion from persisted completed Challenge IDs, and the learner page uses
   it for activity completion and progress messaging. Learner submissions now
-  enforce the next ordered Challenge at the activity access boundary.
+  enforce the next ordered Challenge at the activity access boundary, and the
+  learner renderer presents later Challenges as locked until their turn.
 
 ### 2. Separate attempted, correct, and completed states
 - **Status:** [~]
@@ -64,6 +65,7 @@ complete.
   blocked on the Game Activity container. The progression helper now treats
   attempted/completed Challenge IDs as the ordered activity progression input,
   and server access rejects later Challenges until earlier ones are complete.
+  The learner UI now mirrors that ordering with locked Challenge states.
 
 ### 3. Unify all generation paths around the Game Activity contract
 

@@ -358,6 +358,11 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
                     completed={completedBlocks.includes(block.id)}
                     courseId={courseId}
                     key={block.id}
+                    locked={
+                      !canPreview &&
+                      gameActivityProgress?.nextChallenge !== null &&
+                      gameActivityProgress?.nextChallenge?.id !== block.id
+                    }
                     lessonId={lessonId}
                     preview={canPreview}
                   />

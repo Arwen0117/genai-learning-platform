@@ -24,6 +24,8 @@ export type BlockRendererProps = {
   /** Whether this block is already recorded in the learner's lesson progress. */
   preview?: boolean;
   completed?: boolean;
+  /** Whether this Challenge is waiting for an earlier Challenge in its activity. */
+  locked?: boolean;
   /** Whether the learner replaced this block's content (P4.4 override). */
   overridden?: boolean;
   /**
@@ -44,6 +46,7 @@ export function BlockRenderer(props: BlockRendererProps) {
     courseId,
     lessonId,
     completed = false,
+    locked = false,
     overridden = false,
     onComplete,
     preview = false,
@@ -154,6 +157,11 @@ export function BlockRenderer(props: BlockRendererProps) {
               {t("block.renderer.done")}
             </span>
           ) : null}
+          {locked ? (
+            <span className="text-xs text-muted-foreground">
+              {t("block.renderer.locked")}
+            </span>
+          ) : null}
           {preview && previewCompleted ? (
             <span className="text-xs text-muted-foreground">
               {t("block.renderer.previewNotSaved")}
@@ -170,17 +178,23 @@ export function BlockRenderer(props: BlockRendererProps) {
         </span>
       </header>
 
-      <div className="px-4 py-4">
-        <Component
-          block={block}
-          completed={isCompleted}
-          context={{ courseId, lessonId, preview }}
-          onAttempt={handleAttempt}
-          onComplete={handleComplete}
-        />
-      </div>
+      {locked ? (
+        <p className="px-4 py-4 text-sm text-muted-foreground">
+          {t("block.renderer.lockedHint")}
+        </p>
+      ) : (
+        <div className="px-4 py-4">
+          <Component
+            block={block}
+            completed={isCompleted}
+            context={{ courseId, lessonId, preview }}
+            onAttempt={handleAttempt}
+            onComplete={handleComplete}
+          />
+        </div>
+      )}
 
-      {preview ? null : (
+      {preview || locked ? null : (
         <AttemptHistory
           blockId={block.id}
           lessonId={lessonId}
