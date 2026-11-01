@@ -36,7 +36,7 @@ describe("game activity validation", () => {
     const container = {
       id: "activity-1",
       title: "API design practice",
-      challenges: mockGameActivity("en"),
+      challenges: mockGameActivity("en").challenges,
     };
 
     expect(gameActivityContainerSchema.safeParse(container).success).toBe(true);
@@ -44,7 +44,7 @@ describe("game activity validation", () => {
   });
 
   it("rejects a container with duplicate Challenge identities", () => {
-    const challenges = mockGameActivity("en");
+    const challenges = mockGameActivity("en").challenges;
     const container = {
       id: "activity-1",
       title: "API design practice",
@@ -59,21 +59,42 @@ describe("game activity validation", () => {
     expect(validateGameActivity(container, "en").ok).toBe(false);
   });
 
+  it("validates the activity title against the lesson locale", () => {
+    const activity = {
+      ...mockGameActivity("en"),
+      title: "课程练习",
+    };
+
+    expect(validateGameActivity(activity, "en").ok).toBe(false);
+  });
+
   it("uses canonical Game Activity terminology in generation guidance", () => {
-    expect(
-      gameActivityPrompt({
-        lessonTitle: "API design",
-        objectives: "Recognize safe API patterns",
-        sourceContent: "An API defines a contract.",
-        language: "en",
-      }),
-    ).toContain("Game Activity Challenges");
+    const prompt = gameActivityPrompt({
+      lessonTitle: "API design",
+      objectives: "Recognize safe API patterns",
+      sourceContent: "An API defines a contract.",
+      language: "en",
+    });
+
+    expect(prompt).toContain("Game Activity Challenges");
+    expect(prompt).toContain("JSON object");
+  });
+
+  it("generates one explicit Game Activity container", () => {
+    const activity = mockGameActivity("en");
+
+    expect(activity).toMatchObject({
+      id: expect.any(String),
+      title: expect.any(String),
+      challenges: expect.any(Array),
+    });
+    expect(activity.challenges).toHaveLength(5);
   });
 
   it("accepts five complete challenges in one locale", () => {
     const activity = mockGameActivity("en");
 
-    expect(gameActivitySchema.safeParse(activity).success).toBe(true);
+    expect(gameActivityContainerSchema.safeParse(activity).success).toBe(true);
     expect(validateGameActivity(activity, "en")).toEqual({ ok: true });
   });
 
@@ -126,7 +147,7 @@ describe("game activity validation", () => {
 
   it("allows technical terms, identifiers, URLs, and code in localized content", () => {
     const activity = mockGameActivity("zh");
-    const first = activity.find(
+    const first = activity.challenges.find(
       (challenge) => challenge.payload.variant === "choose",
     );
     if (!first || first.payload.variant !== "choose")
@@ -145,7 +166,7 @@ describe("game activity validation", () => {
 
   it("requires approved, moderated, accessible supporting media", () => {
     const activity = mockGameActivity("en");
-    activity[0].payload.supportingMedia = {
+    activity.challenges[0].payload.supportingMedia = {
       kind: "image",
       url: "https://example.com/diagram.png",
       approvalStatus: "approved",
@@ -162,11 +183,11 @@ describe("game activity validation", () => {
     expect(validateGameActivity(activity, "en")).toEqual({ ok: true });
 
     const invalid = {
-      ...activity[0],
+      ...activity.challenges[0],
       payload: {
-        ...activity[0].payload,
+        ...activity.challenges[0].payload,
         supportingMedia: {
-          ...activity[0].payload.supportingMedia,
+          ...activity.challenges[0].payload.supportingMedia,
           approvalStatus: "pending",
           moderationStatus: "pending",
           altText: undefined,
@@ -174,14 +195,19 @@ describe("game activity validation", () => {
         },
       },
     };
-    expect(validateGameActivity([invalid, ...activity.slice(1)], "en").ok).toBe(
+    expect(
+      validateGameActivity(
+        { ...activity, challenges: [invalid, ...activity.challenges.slice(1)] },
+        "en",
+      ).ok,
+    ).toBe(
       false,
     );
   });
 
   it("caps animations at five seconds and keeps challenge text independent", () => {
     const activity = mockGameActivity("en");
-    activity[1].payload.supportingMedia = {
+    activity.challenges[1].payload.supportingMedia = {
       kind: "animation",
       url: "https://example.com/sequence.mp4",
       approvalStatus: "approved",
@@ -194,17 +220,20 @@ describe("game activity validation", () => {
     expect(validateGameActivity(activity, "en")).toEqual({ ok: true });
 
     const overLimit = {
-      ...activity[1],
+      ...activity.challenges[1],
       payload: {
-        ...activity[1].payload,
+        ...activity.challenges[1].payload,
         supportingMedia: {
-          ...activity[1].payload.supportingMedia,
+          ...activity.challenges[1].payload.supportingMedia,
           durationSeconds: 5.1,
         },
       },
     };
-    expect(validateGameActivity([activity[0], overLimit, ...activity.slice(2)], "en").ok).toBe(
-      false,
-    );
+    expect(
+      validateGameActivity(
+        { ...activity, challenges: [activity.challenges[0], overLimit, ...activity.challenges.slice(2)] },
+        "en",
+      ).ok,
+    ).toBe(false);
   });
 });

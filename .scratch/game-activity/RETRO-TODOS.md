@@ -34,8 +34,9 @@ complete.
   - Update learner rendering and lesson composition to use the container.
 - **Done when:** A learner sees one Game Activity with ordered Challenge progress, and the editor/generator operate on that same model.
 - **Progress:** Added a first-class `id`/`title`/ordered `challenges` schema and
-  validator support, including unique Challenge identity checks. Existing
-  array-based generation and rendering callers still require migration.
+  validator support, including unique Challenge identity checks. Direct Game
+  Activity generation now returns that container and validates it; course
+  lesson composition and learner rendering still require migration.
 
 ### 2. Separate attempted, correct, and completed states
 - **Status:** [~]
@@ -55,7 +56,7 @@ complete.
 
 ### 3. Unify all generation paths around the Game Activity contract
 
-- **Status:** [ ]
+- **Status:** [~]
 - **Blocked by:** 1 and 2
 - **Finding:** Full course generation still emits the older Match/Sort block contract, while direct Game Activity generation supports Choose, feedback, Hints, and media metadata.
 - **Work:**
@@ -64,6 +65,9 @@ complete.
   - Require lesson-grounded content, deterministic answer keys, feedback, Hints, and locale validation.
   - Preserve visible failure for invalid or ambiguous output.
 - **Done when:** Every generation entry point creates the same validated Game Activity shape.
+- **Progress:** The direct Game Activity generator now uses the explicit
+  container schema and prompt contract. Full course generation still inserts
+  the container's Challenges into legacy lesson blocks and requires migration.
 
 ### 4. Add activity-level editor authoring
 

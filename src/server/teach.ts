@@ -354,7 +354,7 @@ export async function generateLessonBlocks(
         ...lesson,
         blocks: [
           ...lesson.blocks.filter((block) => block.type !== "game"),
-          ...activity,
+          ...activity.challenges,
         ],
       },
     };

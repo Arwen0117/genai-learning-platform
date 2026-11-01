@@ -104,6 +104,14 @@ export function validateGameActivity(
       ? (parsed.data as GameActivityContainer).challenges
       : (parsed.data as GameActivity);
   const errors: string[] = [];
+  if (isContainer) {
+    const title = localeText((parsed.data as GameActivityContainer).title);
+    if (
+      (language === "en" && hasChinese(title)) ||
+      (language === "zh" && hasLatin(title))
+    )
+      errors.push("The Game Activity title does not match the lesson locale.");
+  }
   const variants = new Set(challenges.map((block) => block.payload.variant));
   for (const variant of ["sort", "match", "choose"] as const) {
     if (!variants.has(variant))

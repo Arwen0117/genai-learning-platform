@@ -1,13 +1,16 @@
 import { z } from "zod";
 
-import { gameActivitySchema } from "@/lib/game-activity";
+import {
+  gameActivityContainerSchema,
+  type GameActivityContainer,
+} from "@/lib/game-activity";
 import {
   CONTENT_LANGUAGE_LABEL,
   contentLanguageLine,
   type ContentLanguage,
 } from "@/lib/llm/language";
 
-export const generatedGameActivitySchema = gameActivitySchema;
+export const generatedGameActivitySchema = gameActivityContainerSchema;
 export type GeneratedGameActivity = z.infer<typeof generatedGameActivitySchema>;
 
 export function gameActivityPrompt(input: {
@@ -33,13 +36,13 @@ export function gameActivityPrompt(input: {
     `Objectives: ${input.objectives}`,
     `Source content: ${input.sourceContent}`,
     "",
-    "Reply with a JSON array of five Game Activity Challenges. Do not use placeholders.",
+    "Reply with a JSON object containing an id, title, and challenges array of five Game Activity Challenges. Do not use placeholders.",
   ].join("\n");
 }
 
-export function mockGameActivity(language: ContentLanguage): GeneratedGameActivity {
+export function mockGameActivity(language: ContentLanguage): GameActivityContainer {
   const zh = language === "zh";
-  return Array.from({ length: 5 }, (_, index) => {
+  const challenges = Array.from({ length: 5 }, (_, index) => {
     const common = {
       id: `mock-challenge-${index + 1}`,
       title: zh ? `练习 ${index + 1}` : `Practice ${index + 1}`,
@@ -95,4 +98,10 @@ export function mockGameActivity(language: ContentLanguage): GeneratedGameActivi
       },
     };
   });
+
+  return {
+    id: "mock-game-activity",
+    title: zh ? "课程练习" : "Lesson Practice",
+    challenges,
+  };
 }
