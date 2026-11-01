@@ -59,7 +59,7 @@ complete.
 
 ### 3. Unify all generation paths around the Game Activity contract
 
-- **Status:** [~]
+- **Status:** [x]
 - **Blocked by:** 1 and 2
 - **Finding:** Full course generation still emits the older Match/Sort block contract, while direct Game Activity generation supports Choose, feedback, Hints, and media metadata.
 - **Work:**
@@ -70,8 +70,10 @@ complete.
 - **Done when:** Every generation entry point creates the same validated Game Activity shape.
 - **Progress:** The direct Game Activity generator now uses the explicit
   container schema and prompt contract. Full course generation now carries the
-  validated container in generated lesson results; persistence and other
-  generation/editor paths still require migration.
+  validated container in generated lesson results, and learner-facing course
+  generation now uses the same container contract and persists it separately.
+  Shared semantic validation covers challenge variants, feedback, Hints,
+  accessibility, media, ambiguity, and locale before persistence.
 
 ### 4. Add activity-level editor authoring
 

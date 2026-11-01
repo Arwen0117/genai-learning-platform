@@ -8,6 +8,7 @@ import { z } from "zod";
 import { getI18n } from "@/i18n/server";
 import { trackEvent } from "@/lib/analytics";
 import { auth } from "@/lib/auth";
+import { validateGameActivity } from "@/lib/game-activity";
 import { contentLanguageFromLocale } from "@/lib/llm/language";
 import { registerLlmMocks } from "@/lib/llm/mocks";
 import { generateJson } from "@/lib/llm/provider";
@@ -87,6 +88,15 @@ export async function generateLearnerCourse(
         temperature: 0.6,
       },
     );
+    for (const [index, lesson] of generated.lessons.entries()) {
+      const validation = validateGameActivity(lesson.gameActivity, language);
+      if (!validation.ok) {
+        return {
+          ok: false,
+          error: `Generated lesson ${index + 1} needs review: ${validation.errors.join(" ")}`,
+        };
+      }
+    }
 
     const course = await prisma.course.create({
       data: {
@@ -112,6 +122,9 @@ export async function generateLearnerCourse(
                   order: index,
                   estimatedMinutes: lesson.estimatedMinutes,
                   blocks: lesson.blocks as unknown as Prisma.InputJsonValue,
+                  gameActivity: lesson.gameActivity as
+                    | Prisma.InputJsonValue
+                    | undefined,
                 })),
               },
             },
