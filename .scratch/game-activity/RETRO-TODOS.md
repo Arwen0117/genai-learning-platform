@@ -10,10 +10,12 @@ Status values:
 
 ## Current progress
 
-Four of the fourteen follow-up tasks have been completed. Tasks 5 and 12
-remain in progress because the learner-facing history still needs richer
-qualitative Game Activity details, and GitHub branch protection must still
-make the verification workflow a required check. Tasks 13 and 14 are complete.
+Four of the fourteen follow-up tasks have been completed. Task 5 remains in
+progress because learner-facing history now has qualitative Correction, Hint,
+and Playthrough response details, but ordered Challenge progress requires the
+Game Activity container. Task 12 remains in progress because GitHub branch
+protection must still make the verification workflow a required check. Tasks
+13 and 14 are complete.
 
 ## Implementation backlog
 
@@ -79,7 +81,7 @@ make the verification workflow a required check. Tasks 13 and 14 are complete.
   and raw grading JSON is hidden, but the history still needs dedicated
   progress, Correction, and Hint presentation. The history now presents
   Correction and Hint states qualitatively and labels persisted response
-  counts as Playthrough history; true ordered Challenge progress remains
+  counts as Playthrough history. True ordered Challenge progress remains
   blocked on the Game Activity container.
 
 ### 6. Establish explicit published content versions
