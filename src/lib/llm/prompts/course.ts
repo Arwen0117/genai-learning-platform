@@ -65,7 +65,7 @@ export const generatedLessonSchema = z
     }
   });
 
-/** The whole mini-course the model has to return. */
+/** The complete course-shaped response the model has to return. */
 export const learnerCourseSchema = z.object({
   title: z.string().min(3).max(90),
   description: z.string().min(20).max(500),

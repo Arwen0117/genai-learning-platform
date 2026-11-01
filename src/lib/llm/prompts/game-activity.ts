@@ -18,7 +18,7 @@ export function gameActivityPrompt(input: {
 }): string {
   return [
     "Create one structured Game Activity for the lesson below.",
-    "Return exactly five ordered game Challenges: use Sort, Match, and Choose formats.",
+    "Return exactly five ordered Game Activity Challenges: use Sort, Match, and Choose formats.",
     "Every Challenge must be answerable from the source content, with deterministic",
     "answer metadata, correct and incorrect instructional feedback, and an optional hint.",
     "Choose Challenges must contain at least two plausible distractors.",
@@ -33,7 +33,7 @@ export function gameActivityPrompt(input: {
     `Objectives: ${input.objectives}`,
     `Source content: ${input.sourceContent}`,
     "",
-    "Reply with a JSON array of five Game blocks. Do not use placeholders.",
+    "Reply with a JSON array of five Game Activity Challenges. Do not use placeholders.",
   ].join("\n");
 }
 

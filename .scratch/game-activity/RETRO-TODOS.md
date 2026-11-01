@@ -166,7 +166,8 @@ protection must still make the verification workflow a required check. Tasks
 - **Done when:** Public comments, types, tests, and docs describe the same domain model.
 - **Progress:** Stale renderer and generation comments now use Game Activity
   Challenge terminology. Remaining block-oriented types and editor surfaces
-  will be updated with the Game Activity container.
+  will be updated with the Game Activity container. README and generation
+  prompt wording now also use the canonical Game Activity terminology.
 
 ## Environment and guardrail backlog
 

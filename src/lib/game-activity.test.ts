@@ -5,7 +5,10 @@ import {
   validateGameActivity,
   type GameActivity,
 } from "./game-activity";
-import { mockGameActivity } from "./llm/prompts/game-activity";
+import {
+  gameActivityPrompt,
+  mockGameActivity,
+} from "./llm/prompts/game-activity";
 
 const challenge = (index: number): GameActivity[number] => ({
   id: `challenge-${index}`,
@@ -28,6 +31,17 @@ const challenge = (index: number): GameActivity[number] => ({
 });
 
 describe("game activity validation", () => {
+  it("uses canonical Game Activity terminology in generation guidance", () => {
+    expect(
+      gameActivityPrompt({
+        lessonTitle: "API design",
+        objectives: "Recognize safe API patterns",
+        sourceContent: "An API defines a contract.",
+        language: "en",
+      }),
+    ).toContain("Game Activity Challenges");
+  });
+
   it("accepts five complete challenges in one locale", () => {
     const activity = mockGameActivity("en");
 

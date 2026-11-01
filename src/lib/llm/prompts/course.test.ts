@@ -22,6 +22,7 @@ describe("learnerCoursePrompt", () => {
       "No specific goal was given",
     );
   });
+
 });
 
 describe("mockLearnerCourse", () => {
