@@ -10,6 +10,9 @@ const m = vi.hoisted(() => ({
   event: vi.fn(),
   count: vi.fn(),
   enrollment: vi.fn(),
+  playthroughFind: vi.fn(),
+  playthroughCreate: vi.fn(),
+  playthroughUpdate: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: { $transaction: m.transaction } }));
 import { contentVersionForBlock, persistActivity } from "./activity-store";
@@ -32,6 +35,7 @@ const input = {
   lessonId: "l",
   block,
   blocks: [block],
+  activityBlocks: [block],
   activityId: "activity-1",
   attemptId: "attempt",
   answer: { order: [0, 1] },
@@ -56,6 +60,11 @@ beforeEach(() => {
       engagementEvent: { create: m.event },
       lesson: { count: m.count },
       enrollment: { updateMany: m.enrollment },
+      playthrough: {
+        findFirst: m.playthroughFind,
+        create: m.playthroughCreate,
+        update: m.playthroughUpdate,
+      },
     }),
   );
   m.find.mockResolvedValue(null);
@@ -65,6 +74,8 @@ beforeEach(() => {
     { blockId: "g", result: { score: { normalized: 1 } } },
   ]);
   m.count.mockResolvedValue(0);
+  m.playthroughFind.mockResolvedValue(null);
+  m.playthroughCreate.mockResolvedValue({ id: "server-playthrough-1" });
 });
 describe("atomic activity persistence", () => {
   it("saves answer, feedback and snapshot; uses game events rather than quiz events", async () => {
@@ -82,6 +93,13 @@ describe("atomic activity persistence", () => {
     expect(m.event.mock.calls[0][0].data.payload).toMatchObject({
       activityId: "activity-1",
     });
+    expect(m.playthroughCreate).toHaveBeenCalledOnce();
+    expect(m.create.mock.calls[0][0].data.playthroughId).toBe(
+      "server-playthrough-1",
+    );
+    expect(m.create.mock.calls[0][0].data.result.playthroughId).toBe(
+      "server-playthrough-1",
+    );
     expect(m.event.mock.calls.map((c) => c[0].data.type)).toEqual([
       "GAME_FINISH",
       "BLOCK_COMPLETE",
@@ -104,6 +122,80 @@ describe("atomic activity persistence", () => {
     expect(m.event.mock.calls.map((c) => c[0].data.type)).toEqual([
       "GAME_FINISH",
     ]);
+  });
+  it("completes a Playthrough from its Challenges, not unrelated lesson blocks", async () => {
+    const reading = {
+      id: "reading",
+      title: "Reading",
+      type: "reading" as const,
+      payload: { markdown: "Read this first." },
+    };
+
+    await persistActivity({
+      ...input,
+      blocks: [reading, block],
+      activityBlocks: [block],
+    });
+    expect(m.playthroughUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: "COMPLETED", completedAt: expect.any(Date) },
+      }),
+    );
+  });
+  it("completes a multi-Challenge Playthrough from all current-version Challenges", async () => {
+    const secondChallenge = { ...block, id: "second-challenge" };
+    m.list
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          blockId: "g",
+          result: {
+            playthroughId: "server-playthrough-1",
+            completed: true,
+            contentVersion: contentVersionForBlock(block),
+          },
+        },
+        {
+          blockId: "second-challenge",
+          result: {
+            playthroughId: "server-playthrough-1",
+            completed: true,
+            contentVersion: contentVersionForBlock(secondChallenge),
+          },
+        },
+      ]);
+
+    await persistActivity({
+      ...input,
+      activityBlocks: [block, secondChallenge],
+    });
+
+    expect(m.playthroughUpdate).toHaveBeenCalled();
+  });
+  it("keeps a replay Playthrough in progress despite cumulative lesson completion", async () => {
+    m.playthroughCreate
+      .mockResolvedValueOnce({ id: "original-playthrough" })
+      .mockResolvedValueOnce({ id: "replay-playthrough" });
+    m.list.mockResolvedValue([
+      {
+        blockId: "g",
+        result: {
+          playthroughId: "original-playthrough",
+          completed: true,
+        },
+      },
+    ]);
+
+    await persistActivity({
+      ...input,
+      answer: { kind: "replay", playthroughId: "client-replay" },
+    });
+
+    expect(m.playthroughUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "replay-playthrough" },
+      }),
+    );
   });
   it("aggregates latest normalized score per activity, rather than overwriting with the last submission", async () => {
     m.list.mockResolvedValue([
@@ -163,7 +255,7 @@ describe("atomic activity persistence", () => {
         blockId: "g",
         result: {
           contentVersion: contentVersionForBlock(block),
-          playthroughId: "run-2",
+          playthroughId: "server-playthrough-1",
           answer: { kind: "replay" },
         },
       },

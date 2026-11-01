@@ -51,6 +51,7 @@ export async function activityAccess(
         courseId: undefined,
         block,
         blocks: [block],
+        activityBlocks: undefined,
         activityId: undefined,
         preview: true,
       };
@@ -82,12 +83,16 @@ export async function activityAccess(
       activity.data.challenges.some((challenge) => challenge.id === blockId)
         ? activity.data.id
         : undefined;
+    const activityBlocks = activity.success
+      ? activity.data.challenges
+      : undefined;
 
     return {
       userId: user.id,
       courseId: course.id,
       block,
       blocks,
+      activityBlocks,
       activityId,
       preview: true,
     };
@@ -115,6 +120,9 @@ export async function activityAccess(
     activity.data.challenges.some((challenge) => challenge.id === blockId)
       ? activity.data.id
       : undefined;
+  const activityBlocks = activity.success
+      ? activity.data.challenges
+      : undefined;
   if (activity.success && activity.data.challenges.some((b) => b.id === blockId)) {
     const progress = await prisma.lessonProgress.findUnique({
       where: { userId_lessonId: { userId: user.id, lessonId } },
@@ -141,6 +149,7 @@ export async function activityAccess(
     courseId: course.id,
     block,
     blocks,
+    activityBlocks,
     activityId,
     preview: false,
   };

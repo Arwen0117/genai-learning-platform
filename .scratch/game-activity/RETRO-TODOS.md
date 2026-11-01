@@ -138,7 +138,7 @@ complete.
 
 ### 7. Make Playthrough persistence first-class
 
-- **Status:** [ ]
+- **Status:** [~]
 - **Blocked by:** 1, 2, and 6
 - **Finding:** Recovery is reconstructed from block-level attempts and a client-provided playthrough ID.
 - **Work:**
@@ -147,6 +147,11 @@ complete.
   - Treat client IDs as correlation values, not authoritative identity.
   - Support refresh recovery, Replay, first-pass results, retries, Hint use, timestamps, and completion.
 - **Done when:** The server can recover and report a Playthrough without inferring the activity state from loosely related block attempts.
+- **Progress:** A server-owned Playthrough record now groups persisted Game
+  Activity Challenge attempts, tracks completion, and is used for refresh
+  recovery. Client playthrough IDs remain correlation metadata. Full
+  activity-wide history presentation and publication-version binding remain
+  pending.
 
 ### 8. Complete the model-generated Supporting media lifecycle
 

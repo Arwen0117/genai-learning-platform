@@ -104,8 +104,27 @@ export async function loadLatestGamePlaythrough(
       const access = await activityAccess(lessonId, blockId, undefined, preview);
       if (access.preview)
         return { ok: true as const, attempts: [], playthroughId: null };
+      const currentPlaythrough =
+        access.activityId === undefined
+          ? null
+          : await prisma.playthrough.findFirst({
+              where: {
+                userId: access.userId,
+                lessonId,
+                activityId: access.activityId,
+              },
+              orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+              select: { id: true, status: true, completedAt: true },
+            });
       const rows = await prisma.activityAttempt.findMany({
-        where: { userId: access.userId, lessonId, blockId },
+        where: {
+          userId: access.userId,
+          lessonId,
+          blockId,
+          ...(currentPlaythrough === null
+            ? {}
+            : { playthroughId: currentPlaythrough.id }),
+        },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       });
       const version = contentVersionForBlock(access.block);
@@ -122,11 +141,14 @@ export async function loadLatestGamePlaythrough(
       if (!latest) {
         return { ok: true as const, attempts: [], playthroughId: null };
       }
-      const playthroughId = (latest.result as { playthroughId: string })
-        .playthroughId;
+      const playthroughId =
+        currentPlaythrough?.id ??
+        (latest.result as { playthroughId: string }).playthroughId;
       return {
         ok: true as const,
         playthroughId,
+        playthroughStatus: currentPlaythrough?.status ?? null,
+        completedAt: currentPlaythrough?.completedAt?.toISOString() ?? null,
         attempts: rows
           .filter((row) => {
             const result = row.result as {
