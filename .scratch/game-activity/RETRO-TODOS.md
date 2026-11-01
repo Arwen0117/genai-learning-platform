@@ -44,7 +44,8 @@ complete.
   the container during load/save; full Challenge authoring remains. A public
   progression helper now derives the next ordered Challenge and activity
   completion from persisted completed Challenge IDs, and the learner page uses
-  it for activity completion and progress messaging.
+  it for activity completion and progress messaging. Learner submissions now
+  enforce the next ordered Challenge at the activity access boundary.
 
 ### 2. Separate attempted, correct, and completed states
 - **Status:** [~]
@@ -61,7 +62,8 @@ complete.
   incorrect submission and allow the learner to complete the attempted
   Challenge without a correct retry. Activity-level continuation remains
   blocked on the Game Activity container. The progression helper now treats
-  attempted/completed Challenge IDs as the ordered activity progression input.
+  attempted/completed Challenge IDs as the ordered activity progression input,
+  and server access rejects later Challenges until earlier ones are complete.
 
 ### 3. Unify all generation paths around the Game Activity contract
 

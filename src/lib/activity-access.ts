@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { blockSchema, type Block } from "@/lib/blocks/schema";
 import { gameActivityContainerSchema } from "@/lib/game-activity";
+import { getGameActivityProgress } from "@/lib/game-activity-progression";
 
 function storedBlocks(lesson: {
   blocks: unknown;
@@ -100,6 +101,28 @@ export async function activityAccess(
   const blocks = storedBlocks(lesson);
   const block = blocks.find((b) => b.id === blockId);
   if (!block) throw new Error("Activity not found.");
+  const activity = gameActivityContainerSchema.safeParse(lesson.gameActivity);
+  if (activity.success && activity.data.challenges.some((b) => b.id === blockId)) {
+    const progress = await prisma.lessonProgress.findUnique({
+      where: { userId_lessonId: { userId: user.id, lessonId } },
+      select: { completedBlocks: true },
+    });
+    const completedIds = Array.isArray(progress?.completedBlocks)
+      ? progress.completedBlocks.filter(
+          (value): value is string => typeof value === "string",
+        )
+      : [];
+    const activityProgress = getGameActivityProgress(
+      activity.data,
+      completedIds,
+    );
+    if (
+      activityProgress.nextChallenge !== null &&
+      activityProgress.nextChallenge.id !== blockId
+    ) {
+      throw new Error("Complete Game Activity Challenges in order.");
+    }
+  }
   return {
     userId: user.id,
     courseId: course.id,

@@ -3,12 +3,14 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   lesson: vi.fn(),
   enrollment: vi.fn(),
+  lessonProgress: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     lesson: { findUnique: mocks.lesson },
     enrollment: { findUnique: mocks.enrollment },
+    lessonProgress: { findUnique: mocks.lessonProgress },
   },
 }));
 import { activityAccess } from "./activity-access";
@@ -49,6 +51,7 @@ beforeEach(() => {
     module: { course: { id: "c", status: "PUBLISHED" } },
   });
   mocks.enrollment.mockResolvedValue({ userId: "u" });
+  mocks.lessonProgress.mockResolvedValue({ completedBlocks: [] });
 });
 describe("activity access / preview isolation", () => {
   it("authorizes Challenges stored in the Game Activity container", async () => {
@@ -56,6 +59,20 @@ describe("activity access / preview isolation", () => {
 
     expect(access.block).toEqual(challenge);
     expect(access.blocks).toContainEqual(challenge);
+  });
+  it("rejects a later Game Activity Challenge until earlier Challenges are complete", async () => {
+    await expect(activityAccess("l", "challenge-2")).rejects.toThrow(
+      "Complete Game Activity Challenges in order.",
+    );
+  });
+  it("authorizes the next Game Activity Challenge after earlier completion", async () => {
+    mocks.lessonProgress.mockResolvedValue({
+      completedBlocks: ["challenge-1"],
+    });
+
+    await expect(activityAccess("l", "challenge-2")).resolves.toMatchObject({
+      block: { id: "challenge-2" },
+    });
   });
   it("allows an enrolled learner in a published lesson", async () =>
     expect((await activityAccess("l", "b")).preview).toBe(false));
