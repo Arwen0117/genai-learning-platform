@@ -97,6 +97,7 @@ model Lesson {
   order            Int
   estimatedMinutes Int              @default(10)
   blocks           Json
+  gameActivity     Json?
   progress         LessonProgress[]
   activityAttempts ActivityAttempt[]
 }

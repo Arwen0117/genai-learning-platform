@@ -35,8 +35,11 @@ complete.
 - **Done when:** A learner sees one Game Activity with ordered Challenge progress, and the editor/generator operate on that same model.
 - **Progress:** Added a first-class `id`/`title`/ordered `challenges` schema and
   validator support, including unique Challenge identity checks. Direct Game
-  Activity generation now returns that container and validates it; course
-  lesson composition and learner rendering still require migration.
+  Activity generation now returns that container and validates it. Generated
+  lesson results now preserve it as `gameActivity` instead of flattening its
+  Challenges into legacy blocks, and instructor draft persistence now stores
+  the container separately; editor and learner rendering still require
+  migration.
 
 ### 2. Separate attempted, correct, and completed states
 - **Status:** [~]
@@ -66,8 +69,9 @@ complete.
   - Preserve visible failure for invalid or ambiguous output.
 - **Done when:** Every generation entry point creates the same validated Game Activity shape.
 - **Progress:** The direct Game Activity generator now uses the explicit
-  container schema and prompt contract. Full course generation still inserts
-  the container's Challenges into legacy lesson blocks and requires migration.
+  container schema and prompt contract. Full course generation now carries the
+  validated container in generated lesson results; persistence and other
+  generation/editor paths still require migration.
 
 ### 4. Add activity-level editor authoring
 

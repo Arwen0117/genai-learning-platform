@@ -6,6 +6,7 @@ import {
   mockLesson,
   type LessonRequest,
 } from "@/lib/llm/prompts/lesson";
+import { mockGameActivity } from "@/lib/llm/prompts/game-activity";
 
 const request: LessonRequest = {
   courseTitle: "Introduction to Git for beginners",
@@ -41,6 +42,17 @@ describe("lessonPrompt", () => {
 });
 
 describe("mockLesson", () => {
+  it("preserves a generated Game Activity as a lesson-level container", () => {
+    const baseLesson = generatedLessonSchema.parse(mockLesson(prompt));
+    const lesson = generatedLessonSchema.parse({
+      ...baseLesson,
+      gameActivity: mockGameActivity("en"),
+    });
+
+    expect(lesson.gameActivity?.challenges).toHaveLength(5);
+    expect(lesson.blocks.every((block) => block.type !== "game")).toBe(true);
+  });
+
   it("writes a lesson that satisfies the schema", () => {
     const lesson = generatedLessonSchema.parse(mockLesson(prompt));
 

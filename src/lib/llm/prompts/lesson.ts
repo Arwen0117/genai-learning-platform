@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { blockSchema } from "@/lib/blocks/schema";
+import { gameActivityContainerSchema } from "@/lib/game-activity";
 import {
   CONTENT_LANGUAGE_LABEL,
   contentLanguageLine,
@@ -36,6 +37,7 @@ export const generatedLessonSchema = z
     title: z.string().min(2).max(120),
     estimatedMinutes: z.number().int().min(3).max(45),
     blocks: z.array(blockSchema).min(3).max(11),
+    gameActivity: gameActivityContainerSchema.optional(),
   })
   .superRefine((lesson, ctx) => {
     const ids = lesson.blocks.map((block) => block.id);

@@ -36,7 +36,10 @@ import {
 } from "@/lib/llm/prompts/game-activity";
 import type { Translator } from "@/i18n/translate";
 import { prisma } from "@/lib/prisma";
-import { validateGameActivity } from "@/lib/game-activity";
+import {
+  gameActivityContainerSchema,
+  validateGameActivity,
+} from "@/lib/game-activity";
 
 /**
  * Server actions behind the instructor course wizard (P4.6).
@@ -107,6 +110,7 @@ const draftLessonSchema = z.object({
   title: z.string().trim().min(2).max(120),
   estimatedMinutes: z.number().int().min(1).max(60),
   blocks: z.array(blockSchema).min(1).max(8),
+  gameActivity: gameActivityContainerSchema.optional(),
 });
 
 const draftInputSchema = z.object({
@@ -352,9 +356,9 @@ export async function generateLessonBlocks(
       ok: true,
       lesson: {
         ...lesson,
+        gameActivity: activity,
         blocks: [
           ...lesson.blocks.filter((block) => block.type !== "game"),
-          ...activity.challenges,
         ],
       },
     };
@@ -451,6 +455,9 @@ export async function saveCourseDraft(
                 order: lessonIndex,
                 estimatedMinutes: lesson.estimatedMinutes,
                 blocks: lesson.blocks as unknown as Prisma.InputJsonValue,
+                gameActivity: lesson.gameActivity as
+                  | Prisma.InputJsonValue
+                  | undefined,
               })),
             },
           })),

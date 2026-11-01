@@ -1,4 +1,5 @@
 import type { Block, BlockType } from "@/lib/blocks/schema";
+import type { GameActivityContainer } from "@/lib/game-activity";
 import type { GeneratedLesson } from "@/lib/llm/prompts/lesson";
 import type {
   Audience,
@@ -144,6 +145,7 @@ export type DraftModule = {
     title: string;
     estimatedMinutes: number;
     blocks: Block[];
+    gameActivity?: GameActivityContainer;
   }>;
 };
 
@@ -172,6 +174,7 @@ export function toDraftModules(
         title: lesson.title,
         estimatedMinutes: generated.estimatedMinutes,
         blocks: generated.blocks,
+        gameActivity: generated.gameActivity,
       });
     }
 
