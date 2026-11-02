@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { parseParallelLevel, parseParallelProgram } from "./parallel-engine";
+import { PARALLEL_IF_DEPTH, parseParallelLevel, parseParallelProgram } from "./parallel-engine";
 const count = z.number().int().nonnegative();
 const position = z.object({ x: count.max(11), y: count.max(11) });
-const location = z.object({ path: z.array(count).min(1).max(4), iteration: count.nullable() });
+const location = z.object({ path: z.array(count).min(1).max(2 + 2 * PARALLEL_IF_DEPTH), iteration: count.nullable() });
 const history = z.object({
   version: z.literal(1).optional(),
   answer: z.object({ program: z.unknown() }),

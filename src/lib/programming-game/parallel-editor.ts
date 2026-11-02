@@ -1,5 +1,5 @@
 import {
-  PARALLEL_COMMANDS, PARALLEL_LIMITS, countParallelProgramNodes,
+  PARALLEL_COMMANDS, PARALLEL_LIMITS, PARALLEL_IF_DEPTH, countParallelProgramNodes,
   type ParallelCommand, type ParallelLevel, type ParallelProgram,
 } from "./parallel-engine";
 
@@ -32,20 +32,22 @@ const pathOf = (parent?: ParallelEditorParent) => parent === undefined ? [] : ty
 
 function context(program: ParallelProgram, parent?: ParallelEditorParent) {
   const path = pathOf(parent);
-  if (path.length > 3 || path.some((n) => !Number.isInteger(n) || n < 0)) return null;
+  if (path.length > 1 + 2 * PARALLEL_IF_DEPTH || path.some((n) => !Number.isInteger(n) || n < 0)) return null;
   let list = program;
   let kind: "root" | "repeat" | "branch" = "root";
+  let ifDepth = 0;
   for (let i = 0; i < path.length; i++) {
     const node = list[path[i]];
     if (!node) return null;
     if (node.op === "repeat") { list = node.body; kind = "repeat"; }
     else if (node.op === "if") {
+      if (++ifDepth > PARALLEL_IF_DEPTH) return null;
       const arm = path[++i];
       if (arm !== 0 && arm !== 1) return null;
       list = arm === 0 ? node.then : node.else; kind = "branch";
     } else return null;
   }
-  return { list, kind };
+  return { list, kind, ifDepth };
 }
 export function getParallelEditorList(program: ParallelProgram, parent?: ParallelEditorParent): ParallelProgram | null {
   return context(program, parent)?.list ?? null;
@@ -85,7 +87,7 @@ export function insertParallelCommand(
   const target = context(program, parent);
   if (!target || index > target.list.length ||
       ((op === "repeat" || op === "label") && target.kind !== "root") ||
-      (op === "if" && target.kind === "branch")) return null;
+      (op === "if" && target.ifDepth >= PARALLEL_IF_DEPTH)) return null;
   const command: ParallelCommand = op === "repeat" ? { op: "repeat", count: 2, body: [] }
     : op === "if" ? { op: "if", condition: { kind: "wall", direction: "right", not: false }, then: [], else: [] }
     : op === "label" ? { op: "label", id: nextLabel(program) }
@@ -106,14 +108,14 @@ export function moveParallelCommand(
   if (!node || !target || index > target.list.length || countParallelNodes(program) > PARALLEL_LIMITS.nodes) return null;
   const prefix = (a: number[], b: number[]) => a.length <= b.length && a.every((n, i) => n === b[i]);
   if (prefix(source, destination)) return null; // Never put a container inside itself.
-  function accepts(c: ParallelCommand, kind: "root" | "repeat" | "branch"): boolean {
+  function accepts(c: ParallelCommand, kind: "root" | "repeat" | "branch", depth: number): boolean {
     if (!allowed.includes(c.op)) return false;
     if (c.op === "label") return kind === "root";
-    if (c.op === "repeat") return kind === "root" && c.body.every((child) => accepts(child, "repeat"));
-    if (c.op === "if") return kind !== "branch" && [...c.then, ...c.else].every((child) => accepts(child, "branch"));
+    if (c.op === "repeat") return kind === "root" && c.body.every((child) => accepts(child, "repeat", depth));
+    if (c.op === "if") return depth < PARALLEL_IF_DEPTH && [...c.then, ...c.else].every((child) => accepts(child, "branch", depth + 1));
     return true;
   }
-  if (!accepts(node, target.kind)) return null;
+  if (!accepts(node, target.kind, target.ifDepth)) return null;
   const sameList = sourceParent.length === destination.length && prefix(sourceParent, destination);
   if (sameList && (index === sourceIndex || index === sourceIndex + 1)) return program;
   const rebased = [...destination];

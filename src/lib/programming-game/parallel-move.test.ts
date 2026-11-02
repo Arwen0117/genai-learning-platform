@@ -50,7 +50,7 @@ describe("whole block moves", () => {
   it("rejects IF self-nesting and markers or loops inside containers", () => {
     const p: ParallelProgram = [...conditional(), { op: "repeat", count: 2, body: [] }, { op: "label", id: "A" }];
     expect(move(p, [0], 0, [0, 0])).toBeNull(); expect(move(p, [1], 0, [0, 0])).toBeNull(); expect(move(p, [2], 0, [1])).toBeNull();
-    expect(move([...conditional(), ...conditional()], [1], 0, [0, 1])).toBeNull();
+    expect(move([...conditional(), ...conditional()], [1], 0, [0, 1])).not.toBeNull();
   });
   it("checks every moved descendant against allowed commands", () => {
     expect(moveParallelCommand([...conditional(), { op: "repeat", count: 2, body: [] }], allowed.filter((op) => op !== "up"), [0], 0, [1])).toBeNull();

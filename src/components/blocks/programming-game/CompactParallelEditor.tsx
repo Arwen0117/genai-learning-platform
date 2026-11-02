@@ -3,7 +3,7 @@
 import { useRef, useState, type DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PARALLEL_ACTIONS, PARALLEL_LIMITS, type ParallelCommand, type ParallelLevel, type ParallelLocation, type ParallelProgram } from "@/lib/programming-game/parallel-engine";
+import { PARALLEL_ACTIONS, PARALLEL_LIMITS, PARALLEL_IF_DEPTH, type ParallelCommand, type ParallelLevel, type ParallelLocation, type ParallelProgram } from "@/lib/programming-game/parallel-engine";
 import { countParallelNodes, getParallelEditorList, insertParallelCommand, moveParallelCommand, parallelLabels, updateParallelEditorList, type ParallelInsertOp } from "@/lib/programming-game/parallel-editor";
 import { GAME_MESSAGES } from "./messages";
 import { PARALLEL_MESSAGES } from "./parallel-messages";
@@ -56,8 +56,13 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
     changeList(path.slice(0, -1), (list) => list.map((c, i) => i === path[path.length - 1] ? update(c) : c));
   }
   function options(parent: number[]): ParallelInsertOp[] {
-    const repeatBody = parent.length === 1 && program[parent[0]]?.op === "repeat";
-    const controls: ParallelInsertOp[] = !parent.length ? ["repeat", "if", "label", "jump"] : repeatBody ? ["if", "jump"] : ["jump"];
+    let depth = 0, list = program;
+    for (let i = 0; i < parent.length; i++) {
+      const node = list[parent[i]];
+      if (node?.op === "repeat") list = node.body;
+      else if (node?.op === "if") { depth++; list = parent[++i] === 0 ? node.then : node.else; }
+    }
+    const controls: ParallelInsertOp[] = !parent.length ? ["repeat", "if", "label", "jump"] : depth < PARALLEL_IF_DEPTH ? ["if", "jump"] : ["jump"];
     return [...PARALLEL_ACTIONS, ...controls].filter((op) => level.allowed.includes(op));
   }
   function add(op: ParallelInsertOp, parent: number[] = []) {

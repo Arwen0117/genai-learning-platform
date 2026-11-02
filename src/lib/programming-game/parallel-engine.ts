@@ -9,6 +9,8 @@ import { GameInputError, type Point } from "./engine";
 export const PARALLEL_LIMITS = Object.freeze({
   size: 12, robots: 4, nodes: 80, repeat: 20, ticks: 1000, attempts: 4000,
 });
+/** Additive IF grammar bound; kept outside legacy limits/hash snapshots. */
+export const PARALLEL_IF_DEPTH = 4;
 export const PARALLEL_ACTIONS = ["up", "down", "left", "right", "wait", "end"] as const;
 export const PARALLEL_COMMANDS = [...PARALLEL_ACTIONS, "repeat", "if", "label", "jump"] as const;
 export type ParallelAction = (typeof PARALLEL_ACTIONS)[number];
@@ -154,17 +156,18 @@ export function parseParallelProgram(input: unknown, level: ParallelLevel): Para
     if (!level.allowed.includes(p.op as ParallelAction)) reject("DISALLOWED_ACTION");
     return { op: p.op as ParallelAction };
   }
-  function branch(input: unknown, nonempty: boolean): ParallelProgram {
+  function branch(input: unknown, nonempty: boolean, depth: number): ParallelProgram {
     if (!Array.isArray(input) || (nonempty && !input.length) || input.length > PARALLEL_LIMITS.nodes)
       reject(nonempty ? "INVALID_THEN_BODY" : "INVALID_ELSE_BODY");
-    // C1 arms contain actions only. No recursive parsing of untrusted trees.
-    return input.map(action);
+    // Bound depth before recursively inspecting any untrusted child.
+    return input.map((value) => { const child = object(value); return child.op === "if" ? conditional(child, depth + 1) : action(child); });
   }
-  function conditional(p: Record<string, unknown>): ParallelCommand {
+  function conditional(p: Record<string, unknown>, depth = 1): ParallelCommand {
+    if (depth > PARALLEL_IF_DEPTH) reject("IF_DEPTH_LIMIT");
     if (++nodes > PARALLEL_LIMITS.nodes) reject("TOO_MANY_NODES");
     if (!level.allowed.includes("if")) reject("DISALLOWED_IF");
     const c = objectCondition(p.condition);
-    return { op: "if", condition: c, then: branch(p.then, true), else: branch(p.else, false) };
+    return { op: "if", condition: c, then: branch(p.then, true, depth), else: branch(p.else, false, depth) };
   }
   const program: ParallelProgram = input.map((value) => {
     const p = object(value);
@@ -223,10 +226,17 @@ function compile(program: ParallelProgram): ParallelInstruction[] {
       } else if (c.op === "if") {
         const judge: ParallelInstruction = { op: "if", condition: c.condition, path, iteration, trueNext: result.length + 1, falseNext: 0 };
         result.push(judge); emit(c.then, [...path, 0], iteration);
-        const lastThen = result[result.length - 1];
+        const thenStart = judge.trueNext, thenEnd = result.length;
         judge.falseNext = result.length; emit(c.else, [...path, 1], iteration);
-        // Arms contain only actions. Skip ELSE via a zero-cost continuation.
-        if (lastThen.op !== "if") lastThen.next = result.length;
+        // Redirect every fall-through exit, including nested IF false/empty arms.
+        // Jumps retain their explicit destination, and END still terminates.
+        for (let i = thenStart; i < thenEnd; i++) {
+          const instruction = result[i];
+          if (instruction.op === "if") {
+            if (instruction.trueNext === thenEnd) instruction.trueNext = result.length;
+            if (instruction.falseNext === thenEnd) instruction.falseNext = result.length;
+          } else if (instruction.op !== "jump" && (instruction.next ?? i + 1) === thenEnd) instruction.next = result.length;
+        }
       } else if (c.op === "label") {
         labels.set(c.id, result.length); result.push({ op: "label", id: c.id, path, iteration });
       } else if (c.op === "jump") result.push({ op: "jump", target: c.target, jumpTo: -1, path, iteration });

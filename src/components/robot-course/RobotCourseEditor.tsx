@@ -17,6 +17,7 @@ type HintsResult = { ok: true; hints: string[]; mock: boolean } | { ok: false; e
 export function RobotCourseEditor({ courseId: initialCourseId = null, initial }: { courseId?: string | null; initial: RobotCourseDraft }) {
   const { locale } = useI18n(), w = ROBOT_MESSAGES[locale];
   const [draft, setDraft] = useState(initial), [courseId, setCourseId] = useState(initialCourseId), [active, setActive] = useState(0), [busy, setBusy] = useState(false), [generating, setGenerating] = useState(false);
+  const [studentPreview, setStudentPreview] = useState(false);
   const [notice, setNotice] = useState(""), [generated, setGenerated] = useState<{ hints: string[]; mock: boolean; signature: string } | null>(null);
   const signature = JSON.stringify({ lessonId: draft.levels[active].lessonId, language: draft.language, payload: draft.levels[active].payload });
   const latest = useRef(signature), savingNow = useRef(false), generatingNow = useRef(false), mounted = useRef(true);
@@ -56,13 +57,17 @@ export function RobotCourseEditor({ courseId: initialCourseId = null, initial }:
     }}>{w.add}</Button></div>
     <label className="block">{w.levelName}<input className="mt-1 block w-full rounded border bg-background p-2" aria-label={w.levelName} maxLength={120} value={level.title} onChange={(e) => changeLevel({ ...level, title: e.target.value })} /></label>
     <details className="rounded border p-3"><summary className="cursor-pointer">{w.settings}</summary><div className="mt-3"><CourseProgrammingForm payload={level.payload} onChange={(payload) => { if (isParallelProgramming(payload)) changeLevel({ ...level, payload }); }} onPreset={(payload, title) => { if (isParallelProgramming(payload)) changeLevel({ ...level, payload, title }); }} /></div></details>
-    <RobotLevelDesigner key={level.lessonId} payload={level.payload} locale={locale} onVerified={onVerified} onChange={(payload) => changeLevel({ ...level, payload })} />
+    <div className="flex flex-wrap gap-2" role="group" aria-label={locale === "zh" ? "编辑视图" : "Editor view"}>
+      <Button type="button" variant={!studentPreview ? "default" : "outline"} aria-pressed={!studentPreview} onClick={() => setStudentPreview(false)}>{locale === "zh" ? "地图与参考答案" : "Map and reference answer"}</Button>
+      <Button type="button" variant={studentPreview ? "default" : "outline"} aria-pressed={studentPreview} onClick={() => setStudentPreview(true)}>{w.preview}</Button>
+    </div>
+    {!studentPreview && <RobotLevelDesigner key={level.lessonId} payload={level.payload} locale={locale} onVerified={onVerified} onChange={(payload) => changeLevel({ ...level, payload })} />}
     <div className="flex flex-wrap gap-3"><Button type="button" disabled={generating || !parallelProgrammingEditingSchema.safeParse(level.payload).success} variant="outline" onClick={() => void hints()}>{generating ? w.generating : w.ai}</Button><Button type="button" disabled={!valid || busy} onClick={() => void save()}>{busy ? w.saving : w.save}</Button>{courseId && <a className="self-center underline" href={`/play/programming/${courseId}?preview=1`}>{w.play}</a>}</div>
     {generated && <div className="space-y-2 rounded border p-3">{generated.mock && <p>{w.mock}</p>}<ol className="list-decimal pl-5">{generated.hints.map((h, i) => <li key={i}>{h}</li>)}</ol><Button type="button" variant="outline" disabled={generated.signature !== signature} onClick={() => { changeLevel({ ...level, payload: { ...level.payload, hints: generated.hints } }); setGenerated(null); }}>{w.apply}</Button></div>}
     {level.payload.customLevel && <p role="status" className="text-sm">{checks[level.lessonId]?.signature === referenceSignature(level.payload) ? checks[level.lessonId]?.passed ? w.valid : w.referenceFailed : w.pending}</p>}
     <p role="status" className="text-sm">{notice}</p>
   </fieldset>
-    <h2 className="text-xl font-semibold">{w.preview}</h2><p className="text-sm text-muted-foreground">{w.unsaved}</p>
-    {structurallyValid ? <RobotCourseScreen key={`${active}:${JSON.stringify(draft.levels)}`} title={draft.title} levels={draft.levels} preview initialLessonId={level.lessonId} /> : <p role="alert">{w.invalid}</p>}
+    {studentPreview && <section><h2 className="text-xl font-semibold">{w.preview}</h2><p className="text-sm text-muted-foreground">{w.unsaved}</p>
+    {structurallyValid ? <RobotCourseScreen key={`${active}:${JSON.stringify(draft.levels)}`} title={draft.title} levels={draft.levels} preview initialLessonId={level.lessonId} onLevelChange={(lessonId) => setActive(draft.levels.findIndex((l) => l.lessonId === lessonId))} /> : <p role="alert">{w.invalid}</p>}</section>}
   </div>;
 }

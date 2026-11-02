@@ -64,10 +64,12 @@ describe("parallel palette insertion", () => {
     expect(getParallelEditorList(p, [0, 0, 0])).toEqual([]);
     expect(countParallelNodes(next)).toBe(3);
   });
-  it("rejects IF/repeat inside either branch without a fallback insertion", () => {
+  it("accepts nested IF but rejects repeat inside either branch", () => {
     const p = insertParallelCommand([], allowed, "if", 0)!;
-    for (const op of ["if", "repeat"]) for (const branch of [0, 1])
-      expect(insertParallelCommand(p, allowed, op, 0, [0, branch])).toBeNull();
+    for (const branch of [0, 1]) {
+      expect(insertParallelCommand(p, allowed, "if", 0, [0, branch])).not.toBeNull();
+      expect(insertParallelCommand(p, allowed, "repeat", 0, [0, branch])).toBeNull();
+    }
   });
   it("changes only the addressed branch when reordering/deleting", () => {
     let p = insertParallelCommand([], allowed, "if", 0)!;

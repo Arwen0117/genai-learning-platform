@@ -126,10 +126,10 @@ describe("conditional program validation", () => {
     expect(() => parseParallelProgram([{ ...choose[0], then: [] }], level())).toThrow("INVALID_THEN_BODY");
     expect(() => parseParallelProgram([{ ...choose[0], else: null }], level())).toThrow("INVALID_ELSE_BODY");
   });
-  it("rejects controls inside either arm without traversing cycles", () => {
+  it("rejects nested loops and stops cyclic IF input at the depth limit", () => {
     const cycle = { op: "if", condition, then: [] as unknown[], else: [] };
     cycle.then.push(cycle);
-    expect(() => parseParallelProgram([cycle], level())).toThrow("INVALID_ACTION");
+    expect(() => parseParallelProgram([cycle], level())).toThrow("IF_DEPTH_LIMIT");
     expect(() => parseParallelProgram([{ ...choose[0], else: [{ op: "repeat", count: 2, body: [{ op: "wait" }] }] }], level())).toThrow("INVALID_ACTION");
   });
   it("validates both branches even if one will never be taken", () => {
