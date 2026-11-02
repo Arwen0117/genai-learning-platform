@@ -1,20 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowDown, ArrowUp, Copy, Loader2, Sparkles, Trash2, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Trash2, TriangleAlert } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { GameActivityContainer } from "@/lib/game-activity";
-import { useI18n, useT } from "@/i18n/client";
+import { useT } from "@/i18n/client";
 import { cn } from "@/lib/utils";
-import { isTemplateGameActivity } from "./block-templates";
 import { swapItems } from "./editor-utils";
-
-export type GameActivityGenerateResult =
-  | { ok: true; activity: GameActivityContainer }
-  | { ok: false; error: string };
 
 export type GameActivityEditorPanelProps = {
   activity: GameActivityContainer | undefined;
@@ -23,10 +17,12 @@ export type GameActivityEditorPanelProps = {
   selectedChallengeId: string | null;
   onChange: (activity: GameActivityContainer) => void;
   onSelectChallenge: (challengeId: string) => void;
-  /** Lesson-scoped generate action; omit to hide the Generate control. */
-  onGenerate?: () => Promise<GameActivityGenerateResult>;
 };
 
+/**
+ * Middle-column Game Activity list: title, Challenges, reorder/duplicate/delete.
+ * Generate with AI lives on the right-hand block editor when a Challenge is selected.
+ */
 export function GameActivityEditorPanel({
   activity,
   errors,
@@ -34,78 +30,11 @@ export function GameActivityEditorPanel({
   challengeIssues,
   onChange,
   onSelectChallenge,
-  onGenerate,
 }: GameActivityEditorPanelProps) {
   const t = useT();
-  const { locale } = useI18n();
-  const [generating, setGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState<string | null>(null);
-
-  async function handleGenerate(): Promise<void> {
-    if (onGenerate === undefined || generating) {
-      return;
-    }
-
-    const needsConfirm =
-      activity !== undefined && !isTemplateGameActivity(activity, locale);
-    if (needsConfirm && !window.confirm(t("editor.generate.confirmReplace"))) {
-      return;
-    }
-
-    setGenerating(true);
-    setGenerateError(null);
-    try {
-      const result = await onGenerate();
-      if (result.ok) {
-        onChange(result.activity);
-        return;
-      }
-      setGenerateError(result.error);
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  const generateControl =
-    onGenerate === undefined ? null : (
-      <Button
-        disabled={generating}
-        onClick={() => {
-          void handleGenerate();
-        }}
-        size="sm"
-        type="button"
-        variant="outline"
-      >
-        {generating ? (
-          <Loader2 aria-hidden="true" className="animate-spin" />
-        ) : (
-          <Sparkles aria-hidden="true" />
-        )}
-        {generating ? t("editor.generate.busy") : t("editor.generate.withAi")}
-      </Button>
-    );
 
   if (activity === undefined) {
-    return (
-      <section className="space-y-3 rounded-xl p-3 ring-1 ring-primary/30">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-primary">
-            {t("editor.gameActivity.title")}
-          </p>
-          {generateControl}
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {t("editor.gameActivity.missingHint")}
-        </p>
-        {generateError === null ? null : (
-          <p className="flex items-start gap-1.5 rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-[11px] text-red-700">
-            <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-            {generateError}
-          </p>
-        )}
-      </section>
-    );
+    return null;
   }
 
   const currentActivity = activity;
@@ -120,12 +49,9 @@ export function GameActivityEditorPanel({
         <p className="text-xs font-medium uppercase tracking-wide text-primary">
           {t("editor.gameActivity.title")}
         </p>
-        <div className="flex items-center gap-2">
-          {generateControl}
-          <Badge variant="secondary">
-            {t("editor.gameActivity.count", { count: activity.challenges.length })}
-          </Badge>
-        </div>
+        <Badge variant="secondary">
+          {t("editor.gameActivity.count", { count: activity.challenges.length })}
+        </Badge>
       </div>
 
       <Input
@@ -146,13 +72,6 @@ export function GameActivityEditorPanel({
           {error}
         </p>
       ))}
-
-      {generateError === null ? null : (
-        <p className="flex items-start gap-1.5 rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-[11px] text-red-700">
-          <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-          {generateError}
-        </p>
-      )}
 
       <ul className="space-y-1.5">
         {activity.challenges.map((challenge, index) => (

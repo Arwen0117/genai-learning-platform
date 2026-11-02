@@ -4,14 +4,21 @@ import { Loader2, Sparkles, Trash2, TriangleAlert } from "lucide-react";
 
 import { useState } from "react";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer";
-import { blockSchema, type SimulationBlock } from "@/lib/blocks/schema";
+import {
+  blockSchema,
+  type SimulationBlock,
+} from "@/lib/blocks/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n, useT } from "@/i18n/client";
 import { blockMetaFor } from "@/lib/blocks/meta";
 import type { Block } from "@/lib/blocks/schema";
-import { isTemplateSimulationBlock } from "./block-templates";
+import type { GameActivityContainer } from "@/lib/game-activity";
+import {
+  isTemplateGameActivity,
+  isTemplateSimulationBlock,
+} from "./block-templates";
 import { BlockForm } from "./block-form";
 
 /**
@@ -20,10 +27,17 @@ import { BlockForm } from "./block-form";
  * The panel is keyed by block id (`BlockForm key` below), so switching blocks
  * resets the form-local state — the reading preview tab, the simulation JSON
  * textarea — instead of carrying one block's draft into another.
+ *
+ * Generate with AI appears here for Simulation Blocks and for Game Activity
+ * Challenges (whole-activity refill), matching the selected-block editing flow.
  */
 
 export type SimulationGenerateResult =
   | { ok: true; block: SimulationBlock }
+  | { ok: false; error: string };
+
+export type GameActivityGenerateResult =
+  | { ok: true; activity: GameActivityContainer }
   | { ok: false; error: string };
 
 export type BlockEditorPanelProps = {
@@ -34,6 +48,13 @@ export type BlockEditorPanelProps = {
   onDelete: () => void;
   /** Lesson-scoped Simulation generate; only used when a Simulation is selected. */
   onGenerateSimulation?: () => Promise<SimulationGenerateResult>;
+  /**
+   * Current lesson Game Activity (for confirm-before-replace). Generate applies
+   * the whole five-Challenge container via `onApplyGameActivity`.
+   */
+  gameActivity?: GameActivityContainer;
+  onGenerateGameActivity?: () => Promise<GameActivityGenerateResult>;
+  onApplyGameActivity?: (activity: GameActivityContainer) => void;
 };
 
 export function BlockEditorPanel(props: BlockEditorPanelProps) {
@@ -44,6 +65,9 @@ export function BlockEditorPanel(props: BlockEditorPanelProps) {
     onProblem,
     onDelete,
     onGenerateSimulation,
+    gameActivity,
+    onGenerateGameActivity,
+    onApplyGameActivity,
   } = props;
   const t = useT();
   const { locale } = useI18n();
@@ -65,34 +89,62 @@ export function BlockEditorPanel(props: BlockEditorPanelProps) {
   const meta = blockMetaFor(block.type);
   const canGenerateSimulation =
     block.type === "simulation" && onGenerateSimulation !== undefined;
+  const canGenerateGameActivity =
+    block.type === "game" &&
+    onGenerateGameActivity !== undefined &&
+    onApplyGameActivity !== undefined;
+  const canGenerate = canGenerateSimulation || canGenerateGameActivity;
 
-  async function handleGenerateSimulation(): Promise<void> {
-    if (
-      block === null ||
-      block.type !== "simulation" ||
-      onGenerateSimulation === undefined ||
-      generating
-    ) {
+  async function handleGenerate(): Promise<void> {
+    if (block === null || generating || !canGenerate) {
       return;
     }
 
-    const needsConfirm = !isTemplateSimulationBlock(block, locale);
-    if (needsConfirm && !window.confirm(t("editor.generate.confirmReplace"))) {
-      return;
-    }
-
-    setGenerating(true);
-    setGenerateError(null);
-    try {
-      const result = await onGenerateSimulation();
-      if (result.ok) {
-        // Keep the selected block id so focus and list selection stay put.
-        onChange({ ...result.block, id: block.id });
+    if (block.type === "simulation" && onGenerateSimulation !== undefined) {
+      const needsConfirm = !isTemplateSimulationBlock(block, locale);
+      if (needsConfirm && !window.confirm(t("editor.generate.confirmReplace"))) {
         return;
       }
-      setGenerateError(result.error);
-    } finally {
-      setGenerating(false);
+
+      setGenerating(true);
+      setGenerateError(null);
+      try {
+        const result = await onGenerateSimulation();
+        if (result.ok) {
+          onChange({ ...result.block, id: block.id });
+          return;
+        }
+        setGenerateError(result.error);
+      } finally {
+        setGenerating(false);
+      }
+      return;
+    }
+
+    if (
+      block.type === "game" &&
+      onGenerateGameActivity !== undefined &&
+      onApplyGameActivity !== undefined
+    ) {
+      const needsConfirm =
+        gameActivity !== undefined &&
+        !isTemplateGameActivity(gameActivity, locale);
+      if (needsConfirm && !window.confirm(t("editor.generate.confirmReplace"))) {
+        return;
+      }
+
+      setGenerating(true);
+      setGenerateError(null);
+      try {
+        const result = await onGenerateGameActivity();
+        if (result.ok) {
+          onApplyGameActivity(result.activity);
+          return;
+        }
+        setGenerateError(result.error);
+      } finally {
+        setGenerating(false);
+      }
     }
   }
 
@@ -103,11 +155,11 @@ export function BlockEditorPanel(props: BlockEditorPanelProps) {
           {t("editor.blockEditor.title")}
         </p>
         <div className="flex items-center gap-2">
-          {canGenerateSimulation ? (
+          {canGenerate ? (
             <Button
               disabled={generating}
               onClick={() => {
-                void handleGenerateSimulation();
+                void handleGenerate();
               }}
               size="sm"
               type="button"

@@ -380,7 +380,6 @@
   "editor.gameActivity.copySuffix": "（副本）",
   "editor.gameActivity.delete": "删除第 {index} 个挑战",
   "editor.gameActivity.duplicate": "复制第 {index} 个挑战",
-  "editor.gameActivity.missingHint": "还没有游戏活动。可从此课时生成一组五个挑战的练习，或从“添加块”加入挑战。",
   "editor.gameActivity.moveDown": "下移第 {index} 个挑战",
   "editor.gameActivity.moveUp": "上移第 {index} 个挑战",
   "editor.gameActivity.title": "游戏活动",

@@ -1194,20 +1194,11 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
         />
 
         <div className="space-y-4">
-          {selectedLesson !== null ? (
+          {selectedLesson?.gameActivity !== undefined ? (
             <GameActivityEditorPanel
               activity={selectedLesson.gameActivity}
               errors={lessonIssues}
               onChange={updateGameActivity}
-              onGenerate={async () => {
-                const context = lessonGenerateContext({
-                  title: selectedLesson.title,
-                  blocks: selectedLesson.blocks.filter(
-                    (block) => block.type !== "game",
-                  ),
-                });
-                return generateGameActivity(context);
-              }}
               onSelectChallenge={selectBlock}
               challengeIssues={issues.challenges}
               selectedChallengeId={selectedBlockId}
@@ -1280,6 +1271,27 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
               deleteBlock(selectedBlock.id);
             }
           }}
+          gameActivity={selectedLesson?.gameActivity}
+          onApplyGameActivity={(activity) => {
+            updateGameActivity(activity);
+            const firstChallenge = activity.challenges[0];
+            if (firstChallenge !== undefined) {
+              selectBlock(firstChallenge.id);
+            }
+          }}
+          onGenerateGameActivity={
+            selectedLesson === null
+              ? undefined
+              : async () => {
+                  const context = lessonGenerateContext({
+                    title: selectedLesson.title,
+                    blocks: selectedLesson.blocks.filter(
+                      (block) => block.type !== "game",
+                    ),
+                  });
+                  return generateGameActivity(context);
+                }
+          }
           onGenerateSimulation={
             selectedLesson === null
               ? undefined

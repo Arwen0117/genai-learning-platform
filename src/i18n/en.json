@@ -380,7 +380,6 @@
   "editor.gameActivity.copySuffix": " (copy)",
   "editor.gameActivity.delete": "Delete Challenge {index}",
   "editor.gameActivity.duplicate": "Duplicate Challenge {index}",
-  "editor.gameActivity.missingHint": "No Game Activity yet. Generate a five-Challenge practice set from this lesson, or add Challenges from Add a block.",
   "editor.gameActivity.moveDown": "Move Challenge {index} down",
   "editor.gameActivity.moveUp": "Move Challenge {index} up",
   "editor.gameActivity.title": "Game Activity",

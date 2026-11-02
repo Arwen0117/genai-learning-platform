@@ -24,11 +24,11 @@ Keep the wizard path as the baseline that already generates a five-Challenge Gam
 3. As an instructor, I want wizard-generated Game Activity and Simulation content to open in the existing editor forms after save, so that I can review and edit without a separate review screen.
 4. As an instructor, I want wizard generation failures for a Game Activity to fail visibly without discarding other reviewed lesson work, so that a bad practice draft does not wipe my progress.
 5. As an instructor, I want a short checklist to confirm the wizard still fills Game Activity and Simulation for review, so that we know the baseline still works before relying on the editor path.
-6. As an instructor editing a lesson, I want a **Generate with AI** action on the Game Activity panel, so that I can fill practice Challenges without leaving the editor.
+6. As an instructor editing a lesson, I want a **Generate with AI** action on the block editor when a Game Activity Challenge is selected, so that I can fill practice Challenges without leaving the editor.
 7. As an instructor editing a lesson, I want a **Generate with AI** action when a Simulation Block is selected, so that I can fill the scenario form without writing the tree by hand.
-8. As an instructor, I want Generate to appear after I am working on that Game Activity or Simulation (not as a separate mode in the add-block picker), so that the flow stays “add or select → generate → edit in place.”
+8. As an instructor, I want Generate to appear after I am working on that Game Activity or Simulation in the block editor (not as a persistent empty panel or a separate add-block picker mode), so that the flow stays “add or select → generate → edit in place.”
 9. As an instructor, I want Game Activity Generate to produce the whole five-Challenge activity in one shot, so that I get a complete practice set aligned with lesson rules.
-10. As an instructor, I want Game Activity Generate to create the Game Activity container when the lesson has none yet, so that I do not have to hand-build empty Challenges first.
+10. As an instructor, I want to add a Game Challenge (scaffolding the Game Activity if missing) then Generate from the block editor, so that I do not need a sticky empty Game Activity strip.
 11. As an instructor, I want Simulation Generate to replace the selected Simulation Block’s content with one generated Simulation Block, so that the form shows a full scenario ready to edit.
 12. As an instructor, I want generation grounded on this lesson’s title, objectives or summary, other blocks’ content, and locale, so that Challenges and scenarios match what I am teaching.
 13. As an instructor, I want generation not to use other lessons or the full course outline as required context, so that the draft stays focused on the current lesson.
@@ -65,10 +65,10 @@ Keep the wizard path as the baseline that already generates a five-Challenge Gam
 - Editor Game Activity generation calls the existing `generateGameActivity` server action with lesson title, objectives/summary, and truncated JSON (or equivalent text) of other lesson blocks as source content, plus content language from locale.
 - Editor Simulation generation adds a new `generateSimulationBlock` server action with the same lesson-scoped context idea and the same Simulation rules already used in lesson generation (catalog motion ids; never invent Supporting media).
 - Do not call full `generateLessonBlocks` from the editor for this slice.
-- UI: **Generate with AI** on the Game Activity editor panel and on the Simulation block editor surface (when a Simulation is selected). Not a separate add-block picker mode.
+- UI: **Generate with AI** on the right-hand **block editor** when a Game Activity Challenge or a Simulation Block is selected — same placement for both types. Not a persistent empty Game Activity strip above LESSON CONTENT, and not a separate add-block picker mode. The middle-column Game Activity list (title + Challenges) still appears only when an activity already exists.
 - Successful generate applies results through existing editor change handlers into in-memory course editor state; Save remains separate.
-- If the lesson has no Game Activity, Generate may create the full five-Challenge container in one shot.
-- Confirm-before-replace when current content is not still the add-block template (Simulation) or when a Game Activity already exists with non-template / teacher-edited content; skip confirm when Game Activity is missing or content still matches the template starter.
+- If the lesson has no Game Activity, the instructor adds a Game Challenge via Add a block (which scaffolds the container), then uses Generate on the block editor to refill the whole five-Challenge activity.
+- Confirm-before-replace when current content is not still the add-block template (Simulation) or when a Game Activity already exists with non-template / teacher-edited content; skip confirm when content still matches the template starter.
 - On failure: show panel error; do not apply partial payloads; keep prior content.
 - While generating: disable the action / show busy state to prevent double submit.
 - Auth: same instructor/admin gate as other teach generate actions; audit via existing LLM job usage keys where applicable (`course-game-activity`; add an appropriate usage key for simulation-only generation).
@@ -79,7 +79,7 @@ Keep the wizard path as the baseline that already generates a five-Challenge Gam
 
 - Good tests assert external behavior: given lesson context or panel state, generate returns/applies valid content, confirm gates overwrite, failure preserves prior content and surfaces an error. Do not assert prompt string internals or private React state.
 - **Seam 1 — Generation contract:** tests around `generateGameActivity` / `generateSimulationBlock` (and shared validation): shape, locale rules, motion/media constraints, visible failure on invalid output. Prefer schema + validation + prompt contract tests already used for lessons/Game Activities; extend for the Simulation single-block action.
-- **Seam 2 — Editor apply:** component/integration tests on Game Activity panel and Simulation editor wiring: generate success → form fields reflect payload via `onChange`; template/missing skips confirm; edited content requires confirm; failure keeps previous props/content.
+- **Seam 2 — Editor apply:** component/integration tests on the block editor (Challenge + Simulation) wiring: generate success → apply via change handlers; template skips confirm; edited content requires confirm; failure keeps previous props/content.
 - Prior art: Game Activity editor panel tests, block template tests, lesson prompt / Simulation payload tests, `validateGameActivity`.
 - Wizard: manual checklist only in this feature (create course → generate lessons → confirm Game Activity and Simulation appear → save → open editor forms). Reuse existing automated prompt/validation tests; do not add a large new wizard E2E suite here.
 
