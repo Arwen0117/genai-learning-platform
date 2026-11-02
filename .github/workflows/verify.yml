@@ -16,7 +16,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # jsdom 30 (via Vitest) needs Node ^22.22.2 || ^24.15.0 || >=26 —
+          # Node 20 lacks zlib.createZstdDecompress, so undici crashes on load.
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run verify
