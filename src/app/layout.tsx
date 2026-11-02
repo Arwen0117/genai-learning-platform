@@ -49,7 +49,11 @@ async function LocaleShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"

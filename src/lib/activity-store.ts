@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import type { Block } from "@/lib/blocks/schema";
 import type { ActivityGrade } from "@/lib/blocks/activity-result";
 import { gameActivityContainerSchema } from "@/lib/game-activity";
-import { contentHashForGameActivity } from "@/lib/game-activity-version";
 
 export function contentVersionForBlock(block: Block): string {
   return createHash("sha256")
