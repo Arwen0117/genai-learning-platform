@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { Block, BlockType } from "@/lib/blocks/schema";
+import type { Block, BlockType, GameBlock } from "@/lib/blocks/schema";
 import type { GameActivityContainer } from "@/lib/game-activity";
 import {
   AUDIENCE_SUGGESTIONS,
@@ -48,7 +48,7 @@ import { postJson } from "@/lib/post-json";
 import { BlockEditorPanel } from "./block-editor-panel";
 import { BlockListPanel } from "./block-list-panel";
 import { useI18n } from "@/i18n/client";
-import { createBlock } from "./block-templates";
+import { createBlock, createGameActivity } from "./block-templates";
 import { StructurePanel } from "./structure-panel";
 import { GameActivityEditorPanel } from "./game-activity-editor-panel";
 import { swapItems } from "./editor-utils";
@@ -608,6 +608,45 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
 
   function addBlock(type: BlockType): void {
     if (selectedLessonId === null) {
+      return;
+    }
+
+    // Game Challenges belong in the lesson's Game Activity, not the block list.
+    if (type === "game") {
+      let selectedId: string | null = null;
+      commit((previous) =>
+        updateLesson(previous, selectedLessonId, (lesson) => {
+          const challenge = createBlock("game", locale) as GameBlock;
+          selectedId = challenge.id;
+
+          if (lesson.gameActivity !== undefined) {
+            return {
+              ...lesson,
+              gameActivity: {
+                ...lesson.gameActivity,
+                challenges: [...lesson.gameActivity.challenges, challenge],
+              },
+            };
+          }
+
+          const legacyGames = lesson.blocks.filter(
+            (block): block is GameBlock => block.type === "game",
+          );
+          const activity = createGameActivity(locale, {
+            title: lesson.title,
+            seedChallenges: [...legacyGames, challenge],
+          });
+
+          return {
+            ...lesson,
+            blocks: lesson.blocks.filter((block) => block.type !== "game"),
+            gameActivity: activity,
+          };
+        }),
+      );
+      if (selectedId !== null) {
+        setSelectedBlockId(selectedId);
+      }
       return;
     }
 

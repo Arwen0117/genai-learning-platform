@@ -1,5 +1,6 @@
 import type { Locale } from "@/i18n/config";
-import type { Block, BlockType, SortItem } from "@/lib/blocks/schema";
+import type { GameActivityContainer } from "@/lib/game-activity";
+import type { Block, BlockType, GameBlock, SortItem } from "@/lib/blocks/schema";
 
 /**
  * Starting points for the block picker in the course editor (P5.1).
@@ -45,6 +46,11 @@ export const BLOCK_TYPE_INFO = [
     type: "coding",
     labelKey: "block.coding",
     descriptionKey: "editor.template.coding.description",
+  },
+  {
+    type: "game",
+    labelKey: "block.game",
+    descriptionKey: "editor.template.game.description",
   },
   {
     type: "simulation",
@@ -347,4 +353,33 @@ const CHINESE: Record<BlockType, Template> = {
 export function createBlock(type: BlockType, locale: Locale = "en"): Block {
   const templates = locale === "zh" ? CHINESE : ENGLISH;
   return templates[type]();
+}
+
+/** Game Activities require exactly five Challenges to validate and publish. */
+export const GAME_ACTIVITY_CHALLENGE_COUNT = 5;
+
+/**
+ * Builds a Game Activity with five Challenges. Optional seeds (e.g. legacy
+ * standalone `game` blocks) fill the first slots; the rest are templates.
+ */
+export function createGameActivity(
+  locale: Locale = "en",
+  options?: {
+    id?: string;
+    title?: string;
+    seedChallenges?: readonly GameBlock[];
+  },
+): GameActivityContainer {
+  const challenges: GameBlock[] = [...(options?.seedChallenges ?? [])];
+  while (challenges.length < GAME_ACTIVITY_CHALLENGE_COUNT) {
+    challenges.push(createBlock("game", locale) as GameBlock);
+  }
+
+  return {
+    id: options?.id ?? crypto.randomUUID(),
+    title:
+      options?.title ??
+      (locale === "zh" ? "课程练习" : "Lesson Practice"),
+    challenges: challenges.slice(0, GAME_ACTIVITY_CHALLENGE_COUNT),
+  };
 }
