@@ -1,6 +1,7 @@
 "use client";
 
 import { z } from "zod";
+import { ParallelAttemptSummary, UnavailableProgrammingHistory } from "./ParallelAttemptSummary";
 import { useI18n } from "@/i18n/client";
 import { parseProgram, type Program } from "@/lib/programming-game/engine";
 import { parseLevel } from "@/lib/programming-game/engine";
@@ -35,6 +36,13 @@ const summarySchema = z.object({
 export function ProgrammingAttemptSummary({ result }: { result: unknown }) {
   const { locale } = useI18n();
   const m = GAME_MESSAGES[locale];
+  const outerVersion = (result as { version?: unknown } | null)?.version;
+  if (outerVersion !== undefined && outerVersion !== 1) return <UnavailableProgrammingHistory result={result} />;
+  const feedback = (result as { feedback?: { feedbackVersion?: unknown; rulesVersion?: unknown } } | null)?.feedback;
+  const version = feedback?.feedbackVersion;
+  if (version !== 2 && feedback?.rulesVersion !== undefined && feedback.rulesVersion !== 1) return <UnavailableProgrammingHistory result={result} />;
+  if (version === 2) return <ParallelAttemptSummary result={result} />;
+  if (version !== undefined && version !== 1) return <UnavailableProgrammingHistory result={result} />;
   const parsed = summarySchema.safeParse(result);
   if (!parsed.success)
     return (

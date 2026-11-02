@@ -1,3 +1,4 @@
+import { isRobotCourse } from "@/lib/programming-game/robot-course";
 import {
   Archive,
   ArrowLeft,
@@ -84,6 +85,8 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
   if (course === null) {
     notFound();
   }
+
+  if (isRobotCourse(course)) redirect(`/play/programming/${course.id}?level=${encodeURIComponent(lessonId)}${canPreview ? "&preview=1" : ""}`);
 
   // Learner-generated courses are private to their author (P4.7): guessing the
   // id of somebody else's mini-course must not reveal even its outline.

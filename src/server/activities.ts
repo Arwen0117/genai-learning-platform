@@ -8,7 +8,9 @@ import {
   gradeActivity,
 } from "@/lib/blocks/activity-result";
 import { prisma } from "@/lib/prisma";
-import { programmingVersion } from "@/lib/programming-game/config";
+import { courseProgrammingVersion, isParallelProgramming } from "@/lib/programming-game/course-config";
+import { parallelProgrammingLevel } from "@/lib/programming-game/parallel-config";
+import { parseParallelProgram } from "@/lib/programming-game/parallel-engine";
 import type { ActivityGrade } from "@/lib/blocks/activity-result";
 
 export async function submitActivity(
@@ -35,18 +37,21 @@ export async function submitActivity(
     if (existing) return { ok: true as const, id: existing.id, grade: savedGrade(existing.result) };
     const programming = access.block.type === "game" && access.block.payload.variant === "programming";
     if (access.block.type === "game" && access.block.payload.variant === "programming") {
-      const version = await programmingVersion(access.block.payload);
+      const version = await courseProgrammingVersion(access.block.payload);
       if (parsed.answer.levelVersion !== version)
         return { ok: false as const, code: "LEVEL_CHANGED" as const, error: "Level updated. Reload before submitting; keep a copy of your program." };
     }
     const grade = gradeActivity(access.block, parsed.answer);
     if (programming) grade.feedback.levelVersion = parsed.answer.levelVersion;
+    const answer = access.block.type === "game" && access.block.payload.variant === "programming" && isParallelProgramming(access.block.payload)
+      ? { program: parseParallelProgram(parsed.answer.program, parallelProgrammingLevel(access.block.payload)), levelVersion: parsed.answer.levelVersion }
+      : parsed.answer;
     const attempt = await persistActivity({
       ...access,
       courseId: access.courseId!,
       lessonId,
       attemptId: parsed.attemptId,
-      answer: parsed.answer,
+      answer,
       grade,
     });
     return { ok: true as const, id: attempt.id, grade: savedGrade(attempt.result) };

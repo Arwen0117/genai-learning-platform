@@ -3,11 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/i18n/client";
 import type { ActivityGrade } from "@/lib/blocks/activity-result";
-import {
-  programmingLevel,
-  programmingVersion,
-  type ProgrammingPayload,
-} from "@/lib/programming-game/config";
+import { programmingLevel } from "@/lib/programming-game/config";
+import { courseProgrammingVersion, isParallelProgramming, type CourseProgrammingPayload } from "@/lib/programming-game/course-config";
+import { ParallelProgrammingActivity } from "./ParallelProgrammingActivity";
 import { postJson } from "@/lib/post-json";
 import { ProgrammingGame } from "./ProgrammingGame";
 import { GAME_MESSAGES } from "./messages";
@@ -23,7 +21,7 @@ export function ProgrammingActivity({
   blockId,
   preview,
 }: {
-  payload: ProgrammingPayload;
+  payload: CourseProgrammingPayload;
   title: string;
   lessonId: string;
   blockId: string;
@@ -32,6 +30,7 @@ export function ProgrammingActivity({
   const { locale } = useI18n();
   const m = GAME_MESSAGES[locale];
   const router = useRouter();
+  if (isParallelProgramming(payload)) return <ParallelProgrammingActivity payload={payload} title={title} lessonId={lessonId} blockId={blockId} preview={preview} />;
   return (
     <ProgrammingGame
       level={programmingLevel(payload)}
@@ -44,7 +43,7 @@ export function ProgrammingActivity({
         preview
           ? undefined
           : async ({ attemptId, program }) => {
-              const levelVersion = await programmingVersion(payload);
+              const levelVersion = await courseProgrammingVersion(payload);
               const result = await postJson<ProgrammingSubmitResult>(
                 "/api/activities",
                 {

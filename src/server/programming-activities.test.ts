@@ -18,7 +18,9 @@ vi.mock("@/lib/blocks/activity-result", async (original) => {
     gradeActivity: m.grade.mockImplementation(actual.gradeActivity),
   };
 });
-import { submitActivity } from "./activities";
+import { createParallelProgrammingPayload } from "@/lib/programming-game/parallel-config";
+import { courseProgrammingVersion } from "@/lib/programming-game/course-config";
+import { submitActivity, loadActivityAttempts } from "./activities";
 import {
   createProgrammingPayload,
   programmingVersion,
@@ -157,5 +159,51 @@ describe("programming submissions", () => {
         answer: { program, levelVersion: await programmingVersion(payload) },
       }),
     ).toMatchObject({ ok: true, id: "winner", grade: { completed: false } });
+  });
+});
+
+describe("v2 programming submissions", () => {
+  const p = createParallelProgrammingPayload("parallel-lanes", "en");
+  const v2: Block = { id: "b", title: "Parallel", type: "game", payload: p };
+  const solution = [{ op: "repeat", count: 4, body: [{ op: "right" }] }];
+  beforeEach(() => { m.access.mockResolvedValue({ userId: "student", courseId: "course", block: v2, blocks: [v2], preview: false }); });
+  it("regrades v2 using authoritative rules and stores only the bounded program and hash", async () => {
+    const levelVersion = await courseProgrammingVersion(p);
+    expect(await submitActivity("lesson", "b", { attemptId, answer: { program: solution, levelVersion, passed: false, robots: [], rulesVersion: 1 } })).toMatchObject({ ok: true, grade: { completed: true, feedback: { feedbackVersion: 2, levelVersion } } });
+    expect(m.persist.mock.calls[0][0].answer).toEqual({ program: solution, levelVersion });
+  });
+  it("rejects stale v2 content without grading or persistence", async () => {
+    const levelVersion = await courseProgrammingVersion({ ...p, robotCount: 1 });
+    expect(await submitActivity("lesson", "b", { attemptId, answer: { program: solution, levelVersion } })).toMatchObject({ ok: false, code: "LEVEL_CHANGED" });
+    expect(m.grade).not.toHaveBeenCalled(); expect(m.persist).not.toHaveBeenCalled();
+  });
+  it("rejects malformed programs without creating a zero-score attempt", async () => {
+    expect(await submitActivity("lesson", "b", { attemptId, answer: { program: [], levelVersion: await courseProgrammingVersion(p) } })).toMatchObject({ ok: false });
+    expect(m.persist).not.toHaveBeenCalled();
+  });
+  it("stores a genuine failed v2 run as zero despite forged success", async () => {
+    expect(await submitActivity("lesson", "b", { attemptId, answer: { program: [{ op: "left" }], levelVersion: await courseProgrammingVersion(p), passed: true } })).toMatchObject({ ok: true, grade: { completed: false, score: { raw: 0 }, feedback: { feedbackVersion: 2, status: "error" } } });
+  });
+  it("returns a saved retry even after v2 content changes", async () => {
+    const grade = gradeActivity(v2, { program: solution }); m.grade.mockClear();
+    m.find.mockResolvedValue({ id: "old-v2", result: grade });
+    expect(await submitActivity("lesson", "b", { attemptId, answer: { program: [], levelVersion: "outdated" } })).toMatchObject({ ok: true, id: "old-v2", grade });
+    expect(m.grade).not.toHaveBeenCalled(); expect(m.persist).not.toHaveBeenCalled();
+  });
+  it("still authorizes before looking up a v2 retry", async () => {
+    m.access.mockRejectedValue(new Error("Not enrolled"));
+    expect(await submitActivity("lesson", "b", { attemptId, answer: { program: solution } })).toMatchObject({ ok: false });
+    expect(m.find).not.toHaveBeenCalled(); expect(m.persist).not.toHaveBeenCalled();
+  });
+  it("preview neither reads student history nor writes submissions", async () => {
+    m.access.mockResolvedValue({ userId: "teacher", block: v2, preview: true });
+    expect(await submitActivity("lesson", "b", { attemptId, answer: { program: solution } }, true)).toEqual({ ok: true, id: null });
+    expect(await loadActivityAttempts("lesson", "b", undefined, true)).toEqual({ ok: true, attempts: [], nextCursor: null });
+    expect(m.find).not.toHaveBeenCalled(); expect(m.persist).not.toHaveBeenCalled();
+  });
+  it("returns the transaction winner's grade for concurrent v2 retries", async () => {
+    const saved = { ...gradeActivity(v2, { program: [{ op: "right" }] }) };
+    m.persist.mockResolvedValue({ id: "winner-v2", result: saved });
+    expect(await submitActivity("lesson", "b", { attemptId, answer: { program: solution, levelVersion: await courseProgrammingVersion(p) } })).toMatchObject({ ok: true, id: "winner-v2", grade: { completed: false, score: { raw: 0 } } });
   });
 });

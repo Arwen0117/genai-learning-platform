@@ -93,3 +93,34 @@ export function insertParallelCommand(
     : { op: op as Exclude<ParallelInsertOp, "repeat" | "if" | "label" | "jump"> };
   return updateParallelEditorList(program, parent, (list) => [...list.slice(0, index), command, ...list.slice(index)]);
 }
+
+/** Move a complete subtree atomically. Addresses refer to the pre-drag tree. */
+export function moveParallelCommand(
+  program: ParallelProgram, allowed: ParallelLevel["allowed"], source: number[],
+  index: number, parent: ParallelEditorParent = [],
+): ParallelProgram | null {
+  if (!source.length || source.some((n) => !Number.isInteger(n) || n < 0) || !Number.isInteger(index) || index < 0) return null;
+  const sourceParent = source.slice(0, -1), sourceIndex = source[source.length - 1];
+  const from = context(program, sourceParent), destination = pathOf(parent);
+  const target = context(program, destination), node = from?.list[sourceIndex];
+  if (!node || !target || index > target.list.length || countParallelNodes(program) > PARALLEL_LIMITS.nodes) return null;
+  const prefix = (a: number[], b: number[]) => a.length <= b.length && a.every((n, i) => n === b[i]);
+  if (prefix(source, destination)) return null; // Never put a container inside itself.
+  function accepts(c: ParallelCommand, kind: "root" | "repeat" | "branch"): boolean {
+    if (!allowed.includes(c.op)) return false;
+    if (c.op === "label") return kind === "root";
+    if (c.op === "repeat") return kind === "root" && c.body.every((child) => accepts(child, "repeat"));
+    if (c.op === "if") return kind !== "branch" && [...c.then, ...c.else].every((child) => accepts(child, "branch"));
+    return true;
+  }
+  if (!accepts(node, target.kind)) return null;
+  const sameList = sourceParent.length === destination.length && prefix(sourceParent, destination);
+  if (sameList && (index === sourceIndex || index === sourceIndex + 1)) return program;
+  const rebased = [...destination];
+  if (prefix(sourceParent, destination) && destination.length > sourceParent.length && destination[sourceParent.length] > sourceIndex)
+    rebased[sourceParent.length]--;
+  const removed = updateParallelEditorList(program, sourceParent, (list) => list.filter((_, i) => i !== sourceIndex));
+  if (!removed) return null;
+  const slot = sameList && index > sourceIndex ? index - 1 : index;
+  return updateParallelEditorList(removed, rebased, (list) => [...list.slice(0, slot), node, ...list.slice(slot)]);
+}

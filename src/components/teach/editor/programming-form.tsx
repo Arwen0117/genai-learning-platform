@@ -17,7 +17,7 @@ import {
   type TemplateId,
 } from "@/lib/programming-game/levels";
 
-export function ProgrammingForm({
+export function LegacyProgrammingForm({
   payload,
   onChange,
   onPreset,

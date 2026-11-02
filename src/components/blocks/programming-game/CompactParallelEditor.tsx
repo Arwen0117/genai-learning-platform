@@ -4,12 +4,13 @@ import { useRef, useState, type DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PARALLEL_ACTIONS, PARALLEL_LIMITS, type ParallelCommand, type ParallelLevel, type ParallelLocation, type ParallelProgram } from "@/lib/programming-game/parallel-engine";
-import { countParallelNodes, getParallelEditorList, insertParallelCommand, parallelLabels, updateParallelEditorList, type ParallelInsertOp } from "@/lib/programming-game/parallel-editor";
+import { countParallelNodes, getParallelEditorList, insertParallelCommand, moveParallelCommand, parallelLabels, updateParallelEditorList, type ParallelInsertOp } from "@/lib/programming-game/parallel-editor";
 import { GAME_MESSAGES } from "./messages";
 import { PARALLEL_MESSAGES } from "./parallel-messages";
 import "./compact-editor.css";
 
 const DRAG_TYPE = "application/x-parallel-command";
+type EditorDrag = { program: ParallelProgram; payload: string } & ({ kind: "palette"; op: ParallelInsertOp } | { kind: "block"; path: number[] });
 const ARROWS = { up: "↑", down: "↓", left: "←", right: "→" };
 function category(op: ParallelInsertOp): "move" | "condition" | "loop" | "flow" | "state" {
   return op in ARROWS ? "move" : op === "if" ? "condition" : op === "repeat" ? "loop" : op === "label" || op === "jump" ? "flow" : "state";
@@ -27,7 +28,7 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
   const [dragging, setDragging] = useState<ParallelProgram | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [targetCue, setTargetCue] = useState<string | null>(null);
-  const drag = useRef<{ op: ParallelInsertOp; program: ParallelProgram } | null>(null);
+  const drag = useRef<EditorDrag | null>(null);
   const editorRoot = useRef<HTMLDivElement | null>(null);
   const nodes = countParallelNodes(program);
   const labels = parallelLabels(program);
@@ -65,7 +66,17 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
   }
   function startDrag(event: DragEvent, op: ParallelInsertOp) {
     if (nodes >= PARALLEL_LIMITS.nodes) { event.preventDefault(); return; }
-    drag.current = { op, program }; setDragging(program); event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(DRAG_TYPE, op);
+    drag.current = { kind: "palette", op, program, payload: `palette:${op}` }; setDragging(program); event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(DRAG_TYPE, drag.current.payload);
+  }
+  function startMove(event: DragEvent, path: number[]) {
+    event.stopPropagation();
+    drag.current = { kind: "block", path, program, payload: `block:${path.join(".")}` };
+    setDragging(program); event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(DRAG_TYPE, drag.current.payload);
+  }
+  function candidate(active: EditorDrag, index: number, parent: number[]) {
+    return active.kind === "palette" ? insertParallelCommand(program, level.allowed, active.op, index, parent)
+      : moveParallelCommand(program, level.allowed, active.path, index, parent);
   }
   function dropHandlers(index: number, parent: number[] = []) {
     const target = `${parent.join(".")}:${index}`;
@@ -74,15 +85,15 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
         event.stopPropagation();
         if (!drag.current || drag.current.program !== program || !Array.from(event.dataTransfer.types).includes(DRAG_TYPE)) return;
         event.preventDefault();
-        const valid = insertParallelCommand(program, level.allowed, drag.current.op, index, parent) !== null;
-        event.dataTransfer.dropEffect = valid ? "copy" : "none"; setDropTarget(valid ? target : null);
+        const valid = candidate(drag.current, index, parent) !== null;
+        event.dataTransfer.dropEffect = valid ? (drag.current.kind === "palette" ? "copy" : "move") : "none"; setDropTarget(valid ? target : null);
       },
       onDragLeave() { setDropTarget((current) => current === target ? null : current); },
       onDrop(event: DragEvent<HTMLDivElement>) {
         event.preventDefault(); event.stopPropagation();
-        const active = drag.current; const op = active?.op;
-        if (op && active?.program === program && event.dataTransfer.getData(DRAG_TYPE) === op) {
-          const next = insertParallelCommand(program, level.allowed, op, index, parent); if (next) edit(next);
+        const active = drag.current;
+        if (active?.program === program && event.dataTransfer.getData(DRAG_TYPE) === active.payload) {
+          const next = candidate(active, index, parent); if (next && next !== program) edit(next);
         }
         endDrag();
       },
@@ -128,6 +139,7 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
         return <li key={index} className={`pg-block pg-kind-${kind}`} aria-current={highlighted ? "step" : undefined} data-op={c.op} data-targeted={c.op === "label" && c.id === targetCue ? "true" : undefined}>
           <div {...dropHandlers(index, parent)} className="pg-drop-slot" aria-label={`${p.insert} ${num}`}><span>+</span></div>
           <div className="pg-block-header">
+            <button type="button" className="pg-block-drag" draggable aria-label={`${p.moveBlock} ${num}`} title={p.moveHint} onDragStart={(event) => startMove(event, path)} onDragEnd={endDrag}>⠿</button>
             <span className="pg-block-number">{num}</span>
             <span className="pg-block-name"><span aria-hidden="true">{symbol(c.op)}</span> {name(c.op)}</span>
             {c.op === "repeat" && <Input className="pg-repeat-count" type="number" min={1} max={20} step={1} value={c.count || ""} aria-label={`${m.times} ${num}`}

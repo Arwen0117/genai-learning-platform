@@ -17,6 +17,8 @@ vi.mock("@/i18n/server", () => ({
   getI18n: async () => ({ t: (key: string) => key }),
 }));
 import { saveCourse } from "./editor";
+import { createParallelProgrammingPayload } from "@/lib/programming-game/parallel-config";
+import type { EditorCourseInput } from "@/lib/teach-editor";
 import { createProgrammingPayload } from "@/lib/programming-game/config";
 
 function draft() {
@@ -95,5 +97,25 @@ describe("programming course authoring", () => {
     });
     expect((await saveCourse("course", draft())).ok).toBe(false);
     expect(m.transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("v2 course authoring", () => {
+  it("persists a four-robot v2 activity without changing its block ID", async () => {
+    const input: EditorCourseInput = draft();
+    const p = createParallelProgrammingPayload("parallel-goal-guard", "zh", 4);
+    input.modules[0].lessons[0].blocks[0] = { id: "b", type: "game", title: "Robots", payload: p };
+    expect((await saveCourse("course", input)).ok).toBe(true);
+    expect(m.lesson.mock.calls[0][0].data.blocks[0]).toEqual({ id: "b", type: "game", title: "Robots", payload: p });
+  });
+  it("rejects unknown v2 revisions before entering a transaction", async () => {
+    const input = draft();
+    Object.assign(input.modules[0].lessons[0].blocks[0], { payload: { ...createParallelProgrammingPayload("parallel-lanes", "en"), templateRevision: 99 } });
+    expect((await saveCourse("course", input)).ok).toBe(false); expect(m.transaction).not.toHaveBeenCalled();
+  });
+  it("keeps v2 teacher ownership protection", async () => {
+    const input: EditorCourseInput = draft(); input.modules[0].lessons[0].blocks[0] = { id: "b", type: "game", title: "Robots", payload: createParallelProgrammingPayload("parallel-lanes", "en") };
+    m.course.mockResolvedValue({ id: "course", createdById: "another", modules: [] });
+    expect((await saveCourse("course", input)).ok).toBe(false); expect(m.transaction).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 export const PARALLEL_MESSAGES = {
   en: {
+    moveBlock: "Move block", moveHint: "Drag this handle to move the whole block, including its contents. Use the block menu to reorder with the keyboard.",
     label: "Marker", jump: "Jump", destination: "Jump destination", chooseTarget: "Choose target", missingTarget: "Missing target",
     more: "Block options", addElse: "Show Else", hideElse: "Hide empty Else", helpTitle: "How to play", inspect: "Robot details",
     comparison: "Comparison", currentCell: "This cell", addHere: "Add here", legendTitle: "Block categories",
@@ -9,7 +10,7 @@ export const PARALLEL_MESSAGES = {
     addBranch: "Add to branch", dropBranch: "Drop an action into branch", decision: "Last decision", true: "True", false: "False",
     conditions: { wall: "Adjacent cell has a wall", boundary: "Adjacent cell is outside the map", robot: "Adjacent cell has a robot", goal: "This robot is on a goal" },
     ifNote: "IF uses one tick to read the world snapshot; the selected branch starts on a later tick. IF arms contain actions only; IF can be placed inside a repeat.",
-    palette: "Command toolbox", dragHint: "Drag commands into the program slots or a loop body. You can also click to add them.",
+    palette: "Command toolbox", dragHint: "Drag a toolbox command to add it. Drag a block handle to move the whole block into a valid slot or container. You can also click to add commands.",
     drop: "Drop a command here", dropLoop: "Drop an action into this loop", insert: "Insert command",
     mode: "Workshop mode", single: "Single robot (v1)", parallel: "Multiple robots (v2)",
     switchNote: "Switching mode or level clears the current program and run. Knowledge drafts remain separate.",
@@ -42,6 +43,7 @@ export const PARALLEL_MESSAGES = {
     } as Record<string, string>,
   },
   zh: {
+    moveBlock: "移动模块", moveHint: "拖动此手柄移动整个模块及其内部指令；键盘可使用模块菜单调整顺序。",
     label: "标记", jump: "跳转", destination: "跳转目标", chooseTarget: "选择目标", missingTarget: "目标已删除",
     more: "积木选项", addElse: "展开否则", hideElse: "收起空的否则", helpTitle: "玩法说明", inspect: "角色详情",
     comparison: "比较方式", currentCell: "当前格", addHere: "在这里添加", legendTitle: "积木类别",
@@ -51,7 +53,7 @@ export const PARALLEL_MESSAGES = {
     addBranch: "向分支添加", dropBranch: "将动作指令拖入分支", decision: "最后一次判断", true: "成立", false: "不成立",
     conditions: { wall: "相邻格有障碍", boundary: "相邻格超出地图", robot: "相邻格有机器人", goal: "当前机器人在目标格" },
     ifNote: "IF用一个tick读取世界快照，选中的分支在后续tick执行。分支内只放动作；可以把IF放进固定循环。",
-    palette: "指令工具箱", dragHint: "把指令拖到程序插槽或循环体中；也可以点击添加。",
+    palette: "指令工具箱", dragHint: "从工具箱拖动可添加指令；拖动模块左侧手柄可整体移入合法插槽或容器，也可以点击添加。",
     drop: "将指令拖到这里", dropLoop: "将动作指令拖入循环体", insert: "插入指令",
     mode: "测试模式", single: "单机器人（v1）", parallel: "多机器人（v2）",
     switchNote: "切换模式或关卡会清除当前程序与运行状态；知识草稿独立保留。",

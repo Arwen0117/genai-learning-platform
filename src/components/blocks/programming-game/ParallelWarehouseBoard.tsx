@@ -15,7 +15,7 @@ export function ParallelWarehouseBoard({ level, robots, selectedId, onSelect, pa
   const m = GAME_MESSAGES[locale]; const p = PARALLEL_MESSAGES[locale];
   const same = (a: { x: number; y: number }, x: number, y: number) => a.x === x && a.y === y;
   return (
-    <div className="pg-warehouse pg-parallel">
+    <div className="pg-warehouse pg-parallel" data-dense={level.width > 8 || level.height > 8 ? "true" : undefined} style={{ "--pg-cols": level.width, "--pg-rows": level.height } as CSSProperties}>
       <div className="pg-warehouse-header">
         <span className="pg-warehouse-title"><Warehouse size={18} aria-hidden="true" />{m.warehouse}</span>
         <span className="pg-warehouse-badge">v2 · {level.width} × {level.height}</span>

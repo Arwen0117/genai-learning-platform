@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useT, useI18n } from "@/i18n/client";
-import { ProgrammingForm } from "./programming-form";
-import { createProgrammingPayload } from "@/lib/programming-game/config";
-import { getTemplate } from "@/lib/programming-game/levels";
+import { CourseProgrammingForm } from "./course-programming-form";
+import { createParallelProgrammingPayload } from "@/lib/programming-game/parallel-config";
+import { getParallelTemplate } from "@/lib/programming-game/parallel-levels";
 import { GAME_MESSAGES } from "@/components/blocks/programming-game/messages";
 import type { Translator } from "@/i18n/translate";
 import type {
@@ -972,7 +972,7 @@ function GameForm({ block, onChange }: FormProps<"game">) {
     }
 
     if (variant === "programming") {
-      onChange({ ...block, title: getTemplate("first-route").title[locale], payload: createProgrammingPayload("first-route", locale) });
+      onChange({ ...block, title: getParallelTemplate("parallel-lanes").title[locale], payload: createParallelProgrammingPayload("parallel-lanes", locale) });
       return;
     }
     if (variant === "sort") {
@@ -1021,12 +1021,12 @@ function GameForm({ block, onChange }: FormProps<"game">) {
         >
           <option value="sort">{t("editor.game.sort")}</option>
           <option value="match">{t("editor.game.match")}</option>
-          <option value="programming">{m.programmingVariant}</option>
+          {payload.variant === "programming" && <option value="programming">{m.programmingVariant}</option>}
         </select>
       </Field>
 
       {payload.variant === "programming" ? (
-        <ProgrammingForm payload={payload} onChange={(next) => onChange({ ...block, payload: next })}
+        <CourseProgrammingForm payload={payload} onChange={(next) => onChange({ ...block, payload: next })}
           onPreset={(next, title) => onChange({ ...block, title, payload: next })} />
       ) : payload.variant === "sort" ? (
         <div className="space-y-1.5">

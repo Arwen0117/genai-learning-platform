@@ -63,3 +63,6 @@
 .pg-direction-widget option { color: var(--pg-block-ink); background: var(--pg-block-bg); }
 .pg-direction-icon { position: absolute; pointer-events: none; width: 24px; height: 24px; left: 7px; top: 3px; }
 .pg-direction-widget::after { content: "⌄"; position: absolute; pointer-events: none; right: 6px; top: 2px; color: var(--pg-block-ink); }
+.pg-block-drag { display: inline-flex; align-items: center; justify-content: center; width: 24px; min-height: 28px; flex-shrink: 0; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--pg-block-ink); cursor: grab; font-size: 18px; touch-action: auto; }
+.pg-block-drag:hover { border-color: var(--pg-block-line); background: var(--pg-block-bg); }
+.pg-block-drag:active { cursor: grabbing; }
