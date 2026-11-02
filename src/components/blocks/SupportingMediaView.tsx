@@ -1,7 +1,7 @@
 "use client";
 
 import { Play } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { SupportingMedia } from "@/lib/blocks/schema";
@@ -34,12 +34,14 @@ export function SupportingMediaView({
   const reducedMotion = usePrefersReducedMotion();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [userStarted, setUserStarted] = useState(false);
+  const [mediaUrl, setMediaUrl] = useState(media?.url);
+  // Reset Play gate when the media source changes (render-time adjust, not an effect).
+  if (media?.url !== mediaUrl) {
+    setMediaUrl(media?.url);
+    setUserStarted(false);
+  }
   const allowAutoPlay = autoPlay && !reducedMotion;
   const waitingForExplicitPlay = reducedMotion && !userStarted;
-
-  useEffect(() => {
-    setUserStarted(false);
-  }, [media?.url]);
 
   if (!isLearnerVisibleSupportingMedia(media)) return null;
 
