@@ -15,7 +15,7 @@ Instructors can get AI-filled Game Activities and Simulation Blocks when creatin
 
 ## Solution
 
-Keep the wizard path as the baseline that already generates a five-Challenge Game Activity and (when suggested) Simulation Blocks for review in existing forms. In the course editor, add **Generate with AI** on the Game Activity panel and on the Simulation Block editor so instructors can create or refill those two types from lesson-scoped context. Generated payloads populate the existing Game Activity / Challenge and Simulation forms; the instructor still saves explicitly. Overwrites of teacher-edited content require confirmation; failures leave prior content intact. Other block types are out of scope for this slice.
+Keep the wizard path as the baseline that already generates a five-Challenge Game Activity and (when suggested) Simulation Blocks for review in existing forms. In the course editor, add **Generate with AI** on the right-hand block editor when a Game Activity Challenge or Simulation Block is selected so instructors can create or refill those two types from lesson-scoped context. Generated payloads populate the existing Game Activity / Challenge and Simulation forms; the instructor still saves explicitly. Overwrites of teacher-edited content require confirmation; failures leave prior content intact. Other block types are out of scope for this slice.
 
 ## User Stories
 
