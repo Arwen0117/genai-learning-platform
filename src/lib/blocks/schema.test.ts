@@ -544,6 +544,76 @@ describe("blockSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts simulation motion defaults and node supporting media", () => {
+    const result = blockSchema.safeParse({
+      ...validSimulation,
+      payload: {
+        ...validSimulation.payload,
+        motion: {
+          nodeEnter: "fade-up",
+          feedbackReveal: "slide-feedback",
+        },
+        nodes: {
+          ...validSimulation.payload.nodes,
+          triage: {
+            ...validSimulation.payload.nodes.triage,
+            motion: { nodeEnter: "emphasis-pulse" },
+            supportingMedia: {
+              kind: "animation",
+              url: "/media/scene.mp4",
+              approvalStatus: "approved",
+              moderationStatus: "passed",
+              provenance: { source: "instructor-provided" },
+              altText: "Scene animation",
+              decorative: false,
+              durationSeconds: 10,
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unknown simulation motion pattern ids", () => {
+    const result = blockSchema.safeParse({
+      ...validSimulation,
+      payload: {
+        ...validSimulation.payload,
+        motion: { nodeEnter: "spin-forever" },
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects simulation animation supporting media over ten seconds", () => {
+    const result = blockSchema.safeParse({
+      ...validSimulation,
+      payload: {
+        ...validSimulation.payload,
+        nodes: {
+          ...validSimulation.payload.nodes,
+          triage: {
+            ...validSimulation.payload.nodes.triage,
+            supportingMedia: {
+              kind: "animation",
+              url: "/media/scene.mp4",
+              approvalStatus: "approved",
+              moderationStatus: "passed",
+              provenance: { source: "instructor-provided" },
+              decorative: true,
+              durationSeconds: 10.1,
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("accepts a roleplay block", () => {
     expect(blockSchema.safeParse(validRoleplay).success).toBe(true);
   });

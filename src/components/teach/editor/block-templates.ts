@@ -178,6 +178,12 @@ const ENGLISH: Record<BlockType, Template> = {
       intro: "You are about to make a decision. Read the situation and choose.",
       start: "start",
       end: "end",
+      motion: {
+        nodeEnter: "fade-up",
+        choiceSelected: "emphasis-pulse",
+        feedbackReveal: "slide-feedback",
+        summaryEnter: "summary-rise",
+      },
       nodes: {
         start: {
           text: "Describe the situation the learner is in.",
@@ -308,6 +314,12 @@ const CHINESE: Record<BlockType, Template> = {
       intro: "你即将做出一个决定。读完情境后做出选择。",
       start: "start",
       end: "end",
+      motion: {
+        nodeEnter: "fade-up",
+        choiceSelected: "emphasis-pulse",
+        feedbackReveal: "slide-feedback",
+        summaryEnter: "summary-rise",
+      },
       nodes: {
         start: {
           text: "描述学习者所处的情境。",

@@ -60,4 +60,17 @@ describe("supporting media lifecycle", () => {
     const approved = approveSupportingMedia(draft);
     expect(isLearnerVisibleSupportingMedia(approved)).toBe(true);
   });
+
+  it("clamps simulation animation drafts to the simulation max", async () => {
+    const draft = await createSupportingMediaDraft({
+      kind: "animation",
+      prompt: "Short scene for a simulation beat",
+      altText: "Scene",
+      durationSeconds: 12,
+      maxDurationSeconds: 10,
+    });
+    expect(draft.kind).toBe("animation");
+    if (draft.kind !== "animation") throw new Error("Expected animation");
+    expect(draft.durationSeconds).toBe(10);
+  });
 });

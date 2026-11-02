@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { blockSchema } from "@/lib/blocks/schema";
 import {
   generatedLessonSchema,
   lessonPrompt,
@@ -33,6 +34,46 @@ describe("lessonPrompt", () => {
     expect(prompt).toContain("Lesson number: 1 of 3");
     expect(prompt).toContain('"type": "quiz"');
     expect(prompt).toContain('"variant": "match"');
+  });
+
+  it("allows simulation motion catalog defaults and forbids invented media URLs", () => {
+    expect(prompt).toContain('"motion"');
+    expect(prompt).toContain("fade-up");
+    expect(prompt).toContain("Never invent Supporting media URLs");
+  });
+
+  it("accepts a generated simulation payload with motion defaults and no media", () => {
+    const generated = {
+      id: "blk_l2_simulation",
+      title: "Handle a production alert",
+      type: "simulation",
+      payload: {
+        intro: "An alert just fired. Choose carefully.",
+        start: "triage",
+        end: "done",
+        motion: {
+          nodeEnter: "fade-up",
+          choiceSelected: "emphasis-pulse",
+          feedbackReveal: "slide-feedback",
+          summaryEnter: "summary-rise",
+        },
+        nodes: {
+          triage: {
+            text: "PagerDuty is ringing at 2am.",
+            options: [
+              {
+                label: "Acknowledge and check dashboards",
+                next: "done",
+                feedback: "You gather evidence before changing anything.",
+                score: 2,
+              },
+            ],
+          },
+          done: { text: "You closed the loop safely.", options: [] },
+        },
+      },
+    };
+    expect(blockSchema.safeParse(generated).success).toBe(true);
   });
 
   it("mentions the author's notes when there are some", () => {
