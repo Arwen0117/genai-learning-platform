@@ -1,6 +1,12 @@
 import type { Locale } from "@/i18n/config";
 import type { GameActivityContainer } from "@/lib/game-activity";
-import type { Block, BlockType, GameBlock, SortItem } from "@/lib/blocks/schema";
+import type {
+  Block,
+  BlockType,
+  GameBlock,
+  SimulationBlock,
+  SortItem,
+} from "@/lib/blocks/schema";
 
 /**
  * Starting points for the block picker in the course editor (P5.1).
@@ -394,4 +400,57 @@ export function createGameActivity(
       (locale === "zh" ? "课程练习" : "Lesson Practice"),
     challenges: challenges.slice(0, GAME_ACTIVITY_CHALLENGE_COUNT),
   };
+}
+
+/** Challenge shape used to detect an untouched add-block scaffold. */
+function challengeTemplateShape(challenge: GameBlock): unknown {
+  return { title: challenge.title, type: challenge.type, payload: challenge.payload };
+}
+
+/**
+ * True when the activity still matches the locale's add-block Game Activity
+ * starter (default title + five template Challenges; ids may differ). Missing
+ * activities are handled by callers, not here.
+ */
+export function isTemplateGameActivity(
+  activity: GameActivityContainer,
+  locale: Locale = "en",
+): boolean {
+  if (activity.challenges.length !== GAME_ACTIVITY_CHALLENGE_COUNT) {
+    return false;
+  }
+
+  const starter = createGameActivity(locale);
+  if (activity.title !== starter.title) {
+    return false;
+  }
+
+  const templateShape = challengeTemplateShape(
+    createBlock("game", locale) as GameBlock,
+  );
+  return activity.challenges.every(
+    (challenge) =>
+      JSON.stringify(challengeTemplateShape(challenge)) ===
+      JSON.stringify(templateShape),
+  );
+}
+
+/** Simulation shape used to detect an untouched add-block starter. */
+function simulationTemplateShape(block: SimulationBlock): unknown {
+  return { title: block.title, type: block.type, payload: block.payload };
+}
+
+/**
+ * True when the Simulation Block still matches the locale's add-block template
+ * (the id may differ).
+ */
+export function isTemplateSimulationBlock(
+  block: SimulationBlock,
+  locale: Locale = "en",
+): boolean {
+  const template = createBlock("simulation", locale) as SimulationBlock;
+  return (
+    JSON.stringify(simulationTemplateShape(block)) ===
+    JSON.stringify(simulationTemplateShape(template))
+  );
 }

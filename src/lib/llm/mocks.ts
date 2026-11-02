@@ -7,6 +7,7 @@ import { mockCourseOutline } from "@/lib/llm/prompts/outline";
 import { mockRepoAnalysis } from "@/lib/llm/prompts/repo";
 import { mockRoleplayFeedback } from "@/lib/llm/prompts/roleplay";
 import { mockGameActivity } from "@/lib/llm/prompts/game-activity";
+import { mockSimulationBlock } from "@/lib/llm/prompts/simulation-block";
 import { mockSuggestedFiles } from "@/lib/llm/prompts/suggest-files";
 
 /** Reads the repository label back out of a repo-analysis prompt. */
@@ -34,6 +35,9 @@ export function registerLlmMocks(): void {
   registerMock("course-lesson", ({ prompt }) => mockLesson(prompt));
   registerMock("course-game-activity", ({ prompt }) =>
     mockGameActivity(readContentLanguage(prompt)),
+  );
+  registerMock("course-simulation-block", ({ prompt }) =>
+    mockSimulationBlock(readContentLanguage(prompt)),
   );
   registerMock("learner-course", ({ prompt }) =>
     mockLearnerCourse(readContentLanguage(prompt)),
