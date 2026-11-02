@@ -5,50 +5,14 @@ import { useEffect, useState } from "react";
 import type {
   BlockRenderProps,
   GameBlock as GameBlockData,
-  SupportingMedia,
 } from "@/lib/blocks/schema";
 import { useT } from "@/i18n/client";
-import { isLearnerVisibleSupportingMedia } from "@/lib/supporting-media";
+import { CHALLENGE_MAX_ANIMATION_SECONDS } from "@/lib/supporting-media-duration";
 import { loadLatestGamePlaythrough } from "@/server/activities";
 import { ChooseGame } from "./ChooseGame";
 import { MatchGame } from "./MatchGame";
 import { SortGame } from "./SortGame";
-
-function SupportingMediaView({
-  media,
-}: {
-  media: SupportingMedia | undefined;
-}) {
-  if (!isLearnerVisibleSupportingMedia(media)) return null;
-
-  return media.kind === "image" ? (
-    /* eslint-disable-next-line @next/next/no-img-element -- media URLs are instructor-approved content */
-    <img
-      alt={media.decorative ? "" : media.altText}
-      className="mb-4 max-h-64 w-full rounded-lg object-contain"
-      src={media.url}
-    />
-  ) : (
-    <video
-      aria-label={media.decorative ? undefined : media.altText}
-      className="mb-4 max-h-64 w-full rounded-lg"
-      controls
-      muted
-      onSeeking={(event) => {
-        if (event.currentTarget.currentTime > 5) event.currentTarget.currentTime = 5;
-      }}
-      onTimeUpdate={(event) => {
-        if (event.currentTarget.currentTime >= 5) {
-          event.currentTarget.pause();
-          event.currentTarget.currentTime = 5;
-        }
-      }}
-      playsInline
-      preload="metadata"
-      src={media.url}
-    />
-  );
-}
+import { SupportingMediaView } from "./SupportingMediaView";
 
 export type GameRecovery = {
   attempts: Array<{ answer: Record<string, unknown>; completed: boolean }>;
@@ -105,7 +69,10 @@ export function GameBlock({
   if (payload.variant === "sort") {
     return (
       <>
-        <SupportingMediaView media={supportingMedia} />
+        <SupportingMediaView
+          maxDurationSeconds={CHALLENGE_MAX_ANIMATION_SECONDS}
+          media={supportingMedia}
+        />
         <SortGame
           completed={completed}
           feedback={payload.feedback}
@@ -124,7 +91,10 @@ export function GameBlock({
   if (payload.variant === "choose") {
     return (
       <>
-        <SupportingMediaView media={supportingMedia} />
+        <SupportingMediaView
+          maxDurationSeconds={CHALLENGE_MAX_ANIMATION_SECONDS}
+          media={supportingMedia}
+        />
         <ChooseGame
           completed={completed}
           onComplete={() => {
@@ -143,7 +113,10 @@ export function GameBlock({
 
   return (
     <>
-      <SupportingMediaView media={supportingMedia} />
+      <SupportingMediaView
+        maxDurationSeconds={CHALLENGE_MAX_ANIMATION_SECONDS}
+        media={supportingMedia}
+      />
       <MatchGame
         completed={completed}
         onComplete={() => {

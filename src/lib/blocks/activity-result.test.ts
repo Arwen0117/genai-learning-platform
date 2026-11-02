@@ -64,6 +64,37 @@ describe("activity grades", () => {
       },
     ]);
   });
+
+  it("ignores simulation motion and supporting media when grading", () => {
+    const withMotion = blockSchema.parse({
+      ...sim,
+      payload: {
+        ...sim.payload,
+        motion: { nodeEnter: "fade-up", summaryEnter: "summary-rise" },
+        nodes: {
+          ...sim.payload.nodes,
+          start: {
+            ...sim.payload.nodes.start,
+            motion: { feedbackReveal: "slide-feedback" },
+            supportingMedia: {
+              kind: "image",
+              url: "/media/start.png",
+              approvalStatus: "approved",
+              moderationStatus: "passed",
+              provenance: { source: "instructor-provided" },
+              decorative: true,
+            },
+          },
+        },
+      },
+    });
+    const grade = gradeActivity(withMotion, {
+      choices: [{ nodeId: "start", optionIndex: 0 }],
+    });
+    expect(grade.score?.normalized).toBe(1);
+    expect(grade.completed).toBe(true);
+    expect(grade.passed).toBe(true);
+  });
   it("rejects skipped nodes and choices after the end", () => {
     expect(() =>
       gradeActivity(sim, { choices: [{ nodeId: "loop", optionIndex: 0 }] }),

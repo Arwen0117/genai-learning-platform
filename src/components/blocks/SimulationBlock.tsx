@@ -3,13 +3,24 @@
 import { ArrowRight, Check, RotateCcw, TriangleAlert } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { SupportingMediaView } from "@/components/blocks/SupportingMediaView";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/i18n/client";
 import type {
   BlockRenderProps,
   SimulationBlock as SimulationBlockData,
   SimulationOption,
+  SupportingMedia,
 } from "@/lib/blocks/schema";
+import {
+  motionPatternClassName,
+  resolveSimulationMotion,
+} from "@/lib/simulation-motion";
+import { SIMULATION_MAX_ANIMATION_SECONDS } from "@/lib/supporting-media-duration";
+import { usePrefersReducedMotion } from "@/lib/use-prefers-reduced-motion";
+
+/** Built-in (non-authorable) motion for Continue / Start over. */
+const BUILTIN_CONTROL_MOTION = "fade-up" as const;
 
 /**
  * Simulation block: a branching scenario, one decision at a time.
@@ -17,6 +28,9 @@ import type {
  * The learner reads a node, picks one of its options, and reads what that
  * choice led to before moving on. Reaching the `end` node closes the run with a
  * summary: the points collected and a review of every decision.
+ *
+ * Motion patterns and optional node Supporting media enrich presentation only;
+ * they never gate Continue / Skip or change scoring.
  *
  * Two guards keep a badly-authored scenario from trapping the learner: a choice
  * pointing at a node that does not exist ends the run, and so does a path longer
@@ -61,6 +75,7 @@ export function SimulationBlock({
 }: BlockRenderProps<SimulationBlockData>) {
   const t = useT();
   const { intro, start, end, nodes } = block.payload;
+  const reducedMotion = usePrefersReducedMotion();
 
   const continueLockRef = useRef(false);
   const [current, setCurrent] = useState(start);
@@ -68,6 +83,13 @@ export function SimulationBlock({
   const [pending, setPending] = useState<Pending | null>(null);
   const [endReason, setEndReason] = useState<EndReason>("end");
   const [finished, setFinished] = useState(start === end);
+  const [dismissedMedia, setDismissedMedia] = useState<
+    Partial<Record<string, true>>
+  >({});
+  const builtinControlClass = motionPatternClassName(
+    BUILTIN_CONTROL_MOTION,
+    reducedMotion,
+  );
 
   const node = nodes[current];
   const endNode = nodes[end];
@@ -77,12 +99,30 @@ export function SimulationBlock({
       ? t(END_REASON_KEYS[endReason], { steps: MAX_STEPS })
       : t(END_REASON_KEYS[endReason]);
 
+  const nodeEnter = resolveSimulationMotion(block.payload, current, "nodeEnter");
+  const choiceSelected = resolveSimulationMotion(
+    block.payload,
+    current,
+    "choiceSelected",
+  );
+  const feedbackReveal = resolveSimulationMotion(
+    block.payload,
+    current,
+    "feedbackReveal",
+  );
+  const summaryEnter = resolveSimulationMotion(
+    block.payload,
+    end,
+    "summaryEnter",
+  );
+
   function choose(option: SimulationOption): void {
     if (node === undefined || pending !== null || finished) {
       return;
     }
 
     continueLockRef.current = false;
+
     const step: Step = {
       nodeId: current,
       optionIndex: node.options.indexOf(option),
@@ -146,6 +186,15 @@ export function SimulationBlock({
     setPending(null);
     setEndReason("end");
     setFinished(start === end);
+    setDismissedMedia({});
+  }
+
+  function mediaFor(
+    resolved: { supportingMedia?: SupportingMedia },
+    key: string,
+  ): SupportingMedia | undefined {
+    if (dismissedMedia[key]) return undefined;
+    return resolved.supportingMedia;
   }
 
   if (node === undefined) {
@@ -162,7 +211,17 @@ export function SimulationBlock({
       <p className="text-sm text-muted-foreground">{intro}</p>
 
       {finished ? (
-        <div className="space-y-4 rounded-xl bg-muted/50 px-4 py-4 ring-1 ring-foreground/10">
+        <div
+          className={`space-y-4 rounded-xl bg-muted/50 px-4 py-4 ring-1 ring-foreground/10 ${motionPatternClassName(summaryEnter.patternId, reducedMotion)}`}
+        >
+          <SupportingMediaView
+            autoPlay
+            maxDurationSeconds={SIMULATION_MAX_ANIMATION_SECONDS}
+            media={mediaFor(summaryEnter, `summary:${end}`)}
+            onDismiss={() => {
+              setDismissedMedia((prev) => ({ ...prev, [`summary:${end}`]: true }));
+            }}
+          />
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {t("block.sim.summary")}
@@ -199,7 +258,21 @@ export function SimulationBlock({
           )}
         </div>
       ) : (
-        <div className="space-y-4 rounded-xl bg-muted/50 px-4 py-4 ring-1 ring-foreground/10">
+        <div
+          className={`space-y-4 rounded-xl bg-muted/50 px-4 py-4 ring-1 ring-foreground/10 ${motionPatternClassName(nodeEnter.patternId, reducedMotion)}`}
+          key={current}
+        >
+          <SupportingMediaView
+            autoPlay
+            maxDurationSeconds={SIMULATION_MAX_ANIMATION_SECONDS}
+            media={mediaFor(nodeEnter, `node:${current}`)}
+            onDismiss={() => {
+              setDismissedMedia((prev) => ({
+                ...prev,
+                [`node:${current}`]: true,
+              }));
+            }}
+          />
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {t("block.sim.decision", { index: history.length + 1 })}
           </p>
@@ -223,13 +296,20 @@ export function SimulationBlock({
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-xs font-medium">
+              <p
+                className={`text-xs font-medium ${motionPatternClassName(choiceSelected.patternId, reducedMotion)}`}
+              >
                 {t("block.sim.youChose", { option: pending.step.optionLabel })}
               </p>
-              <p className="rounded-lg bg-primary/10 px-3 py-2 text-sm leading-relaxed">
+              <p
+                className={`rounded-lg bg-primary/10 px-3 py-2 text-sm leading-relaxed ${motionPatternClassName(feedbackReveal.patternId, reducedMotion)}`}
+              >
                 {pending.step.feedback}
               </p>
-              <Button onClick={continueAfterFeedback}>
+              <Button
+                className={builtinControlClass}
+                onClick={continueAfterFeedback}
+              >
                 {t("common.continue")}
                 <ArrowRight aria-hidden="true" />
               </Button>
@@ -258,7 +338,11 @@ export function SimulationBlock({
           )}
         </Button>
 
-        <Button onClick={startOver} variant="ghost">
+        <Button
+          className={builtinControlClass}
+          onClick={startOver}
+          variant="ghost"
+        >
           <RotateCcw aria-hidden="true" />
           {t("common.startOver")}
         </Button>

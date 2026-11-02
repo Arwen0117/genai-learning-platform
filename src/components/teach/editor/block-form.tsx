@@ -18,8 +18,286 @@ import type {
   SupportingMedia,
 } from "@/lib/blocks/schema";
 import { simulationBlockSchema } from "@/lib/blocks/schema";
+import {
+  MOTION_BEATS,
+  MOTION_PATTERN_IDS,
+  type MotionBeat,
+  type MotionPatternId,
+  type SimulationMotionDefaults,
+} from "@/lib/simulation-motion";
+import {
+  CHALLENGE_MAX_ANIMATION_SECONDS,
+  SIMULATION_MAX_ANIMATION_SECONDS,
+} from "@/lib/supporting-media-duration";
 import { cn } from "@/lib/utils";
 import { reorderSortItems } from "./block-templates";
+
+const MOTION_BEAT_LABELS: Record<MotionBeat, string> = {
+  nodeEnter: "Node enter",
+  choiceSelected: "Choice selected",
+  feedbackReveal: "Feedback reveal",
+  summaryEnter: "Summary enter",
+};
+
+function SupportingMediaFields({
+  media,
+  maxDurationSeconds,
+  onChange,
+}: {
+  media: SupportingMedia | undefined;
+  maxDurationSeconds: number;
+  onChange: (next: SupportingMedia | undefined) => void;
+}) {
+  return (
+    <fieldset className="space-y-2 rounded-lg border p-3">
+      <legend className="px-1 text-xs font-medium">Supporting media</legend>
+      <p className="text-[11px] text-muted-foreground">
+        Optional, approved media enriches the activity; the text remains the
+        complete learning path.
+      </p>
+      <Field label="Media URL">
+        <Input
+          placeholder="/media/example.png or https://…"
+          value={media?.url ?? ""}
+          onChange={(event) => {
+            const url = event.target.value.trim();
+            if (url.length === 0) {
+              onChange(undefined);
+              return;
+            }
+            onChange(
+              media ?? {
+                kind: "image",
+                url,
+                approvalStatus: "pending",
+                moderationStatus: "pending",
+                provenance: { source: "instructor-provided" },
+                decorative: false,
+              },
+            );
+            if (media !== undefined) onChange({ ...media, url });
+          }}
+        />
+      </Field>
+      {media === undefined ? null : (
+        <>
+          <Field label="Media type">
+            <select
+              className={SELECT_CLASS}
+              value={media.kind}
+              onChange={(event) => {
+                if (event.target.value === media.kind) return;
+                onChange(
+                  media.kind === "image"
+                    ? { ...media, kind: "animation", durationSeconds: 1 }
+                    : {
+                        kind: "image",
+                        url: media.url,
+                        approvalStatus: media.approvalStatus,
+                        moderationStatus: media.moderationStatus,
+                        provenance: media.provenance,
+                        altText: media.altText,
+                        decorative: media.decorative,
+                      },
+                );
+              }}
+            >
+              <option value="image">Image</option>
+              <option value="animation">Animation</option>
+            </select>
+          </Field>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Field label="Approval">
+              <select
+                className={SELECT_CLASS}
+                value={media.approvalStatus}
+                onChange={(event) => {
+                  onChange({
+                    ...media,
+                    approvalStatus: event.target
+                      .value as SupportingMedia["approvalStatus"],
+                  });
+                }}
+              >
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </Field>
+            <Field label="Safety moderation">
+              <select
+                className={SELECT_CLASS}
+                value={media.moderationStatus}
+                onChange={(event) => {
+                  onChange({
+                    ...media,
+                    moderationStatus: event.target
+                      .value as SupportingMedia["moderationStatus"],
+                  });
+                }}
+              >
+                <option value="pending">Pending</option>
+                <option value="passed">Passed</option>
+                <option value="failed">Failed</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="Provenance">
+            <select
+              className={SELECT_CLASS}
+              value={media.provenance.source}
+              onChange={(event) => {
+                onChange({
+                  ...media,
+                  provenance: {
+                    ...media.provenance,
+                    source: event.target
+                      .value as SupportingMedia["provenance"]["source"],
+                  },
+                });
+              }}
+            >
+              <option value="instructor-provided">Instructor-provided</option>
+              <option value="model-generated">Model-generated</option>
+            </select>
+          </Field>
+          {media.provenance.source === "model-generated" ? (
+            <>
+              <Field label="Generating model">
+                <Input
+                  placeholder="Model identifier"
+                  value={media.provenance.model ?? ""}
+                  onChange={(event) => {
+                    const model = event.target.value;
+                    onChange({
+                      ...media,
+                      provenance: {
+                        ...media.provenance,
+                        model: model.length > 0 ? model : undefined,
+                      },
+                    });
+                  }}
+                />
+              </Field>
+              <Field label="Generated at">
+                <Input
+                  placeholder="2026-10-28T12:00:00.000Z"
+                  value={media.provenance.generatedAt ?? ""}
+                  onChange={(event) => {
+                    const generatedAt = event.target.value;
+                    onChange({
+                      ...media,
+                      provenance: {
+                        ...media.provenance,
+                        generatedAt:
+                          generatedAt.length > 0 ? generatedAt : undefined,
+                      },
+                    });
+                  }}
+                />
+              </Field>
+            </>
+          ) : null}
+          <Field label="Alt text">
+            <Input
+              placeholder="Describe the media for learners"
+              value={media.altText ?? ""}
+              onChange={(event) => {
+                const altText = event.target.value;
+                onChange({
+                  ...media,
+                  altText: altText.length > 0 ? altText : undefined,
+                });
+              }}
+            />
+          </Field>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              checked={media.decorative}
+              onChange={(event) => {
+                onChange({ ...media, decorative: event.target.checked });
+              }}
+              type="checkbox"
+            />
+            Decorative media (no alt text needed)
+          </label>
+          {media.kind === "animation" ? (
+            <Field
+              hint={`Maximum ${maxDurationSeconds} seconds`}
+              label="Duration (seconds)"
+            >
+              <Input
+                max={maxDurationSeconds}
+                min={0.1}
+                onChange={(event) => {
+                  const durationSeconds = Number(event.target.value);
+                  onChange({
+                    ...media,
+                    durationSeconds: Number.isFinite(durationSeconds)
+                      ? durationSeconds
+                      : 0.1,
+                  });
+                }}
+                type="number"
+                value={media.durationSeconds}
+              />
+            </Field>
+          ) : null}
+        </>
+      )}
+    </fieldset>
+  );
+}
+
+function MotionDefaultsFields({
+  motion,
+  onChange,
+  legend,
+}: {
+  motion: SimulationMotionDefaults | undefined;
+  onChange: (next: SimulationMotionDefaults | undefined) => void;
+  legend: string;
+}) {
+  function setBeat(beat: MotionBeat, value: string): void {
+    const next: SimulationMotionDefaults = { ...(motion ?? {}) };
+    if (value === "") {
+      delete next[beat];
+    } else {
+      next[beat] = value as MotionPatternId;
+    }
+    onChange(Object.keys(next).length === 0 ? undefined : next);
+  }
+
+  return (
+    <fieldset className="space-y-2 rounded-lg border p-3">
+      <legend className="px-1 text-xs font-medium">{legend}</legend>
+      <p className="text-[11px] text-muted-foreground">
+        Pick catalog patterns per beat. Clear a beat to fall back to the next
+        default layer.
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {MOTION_BEATS.map((beat) => (
+          <Field key={beat} label={MOTION_BEAT_LABELS[beat]}>
+            <select
+              className={SELECT_CLASS}
+              value={motion?.[beat] ?? ""}
+              onChange={(event) => {
+                setBeat(beat, event.target.value);
+              }}
+            >
+              <option value="">(default)</option>
+              {MOTION_PATTERN_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 
 /**
  * Per-type editing forms for the course editor (P5.1).
@@ -1096,197 +1374,11 @@ function GameForm({ block, onChange }: FormProps<"game">) {
           placeholder="Offer a small nudge without giving away the answer."
         />
       </Field>
-      <fieldset className="space-y-2 rounded-lg border p-3">
-        <legend className="px-1 text-xs font-medium">Supporting media</legend>
-        <p className="text-[11px] text-muted-foreground">
-          Optional, approved media enriches the challenge; the text remains the
-          complete learning path.
-        </p>
-        <Field label="Media URL">
-          <Input
-            placeholder="/media/example.png or https://…"
-            value={media?.url ?? ""}
-            onChange={(event) => {
-              const url = event.target.value.trim();
-              if (url.length === 0) {
-                updateMedia(undefined);
-                return;
-              }
-              updateMedia(
-                media ?? {
-                  kind: "image",
-                  url,
-                  approvalStatus: "pending",
-                  moderationStatus: "pending",
-                  provenance: { source: "instructor-provided" },
-                  decorative: false,
-                },
-              );
-              if (media !== undefined) updateMedia({ ...media, url });
-            }}
-          />
-        </Field>
-        {media === undefined ? null : (
-          <>
-            <Field label="Media type">
-              <select
-                className={SELECT_CLASS}
-                value={media.kind}
-                onChange={(event) => {
-                  if (event.target.value === media.kind) return;
-                  updateMedia(
-                    media.kind === "image"
-                      ? { ...media, kind: "animation", durationSeconds: 1 }
-                      : {
-                          kind: "image",
-                          url: media.url,
-                          approvalStatus: media.approvalStatus,
-                          moderationStatus: media.moderationStatus,
-                          provenance: media.provenance,
-                          altText: media.altText,
-                          decorative: media.decorative,
-                        },
-                  );
-                }}
-              >
-                <option value="image">Image</option>
-                <option value="animation">Animation</option>
-              </select>
-            </Field>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Field label="Approval">
-                <select
-                  className={SELECT_CLASS}
-                  value={media.approvalStatus}
-                  onChange={(event) => {
-                    updateMedia({
-                      ...media,
-                      approvalStatus: event.target.value as SupportingMedia["approvalStatus"],
-                    });
-                  }}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                </select>
-              </Field>
-              <Field label="Safety moderation">
-                <select
-                  className={SELECT_CLASS}
-                  value={media.moderationStatus}
-                  onChange={(event) => {
-                    updateMedia({
-                      ...media,
-                      moderationStatus: event.target.value as SupportingMedia["moderationStatus"],
-                    });
-                  }}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="passed">Passed</option>
-                  <option value="failed">Failed</option>
-                </select>
-              </Field>
-            </div>
-            <Field label="Provenance">
-              <select
-                className={SELECT_CLASS}
-                value={media.provenance.source}
-                onChange={(event) => {
-                  updateMedia({
-                    ...media,
-                    provenance: {
-                      ...media.provenance,
-                      source: event.target.value as SupportingMedia["provenance"]["source"],
-                    },
-                  });
-                }}
-              >
-                <option value="instructor-provided">Instructor-provided</option>
-                <option value="model-generated">Model-generated</option>
-              </select>
-            </Field>
-            {media.provenance.source === "model-generated" ? (
-              <>
-                <Field label="Generating model">
-                  <Input
-                    placeholder="Model identifier"
-                    value={media.provenance.model ?? ""}
-                    onChange={(event) => {
-                      const model = event.target.value;
-                      updateMedia({
-                        ...media,
-                        provenance: {
-                          ...media.provenance,
-                          model: model.length > 0 ? model : undefined,
-                        },
-                      });
-                    }}
-                  />
-                </Field>
-                <Field label="Generated at">
-                  <Input
-                    placeholder="2026-10-28T12:00:00.000Z"
-                    value={media.provenance.generatedAt ?? ""}
-                    onChange={(event) => {
-                      const generatedAt = event.target.value;
-                      updateMedia({
-                        ...media,
-                        provenance: {
-                          ...media.provenance,
-                          generatedAt:
-                            generatedAt.length > 0 ? generatedAt : undefined,
-                        },
-                      });
-                    }}
-                  />
-                </Field>
-              </>
-            ) : null}
-            <Field label="Alt text">
-              <Input
-                placeholder="Describe the media for learners"
-                value={media.altText ?? ""}
-                onChange={(event) => {
-                  const altText = event.target.value;
-                  updateMedia({
-                    ...media,
-                    altText: altText.length > 0 ? altText : undefined,
-                  });
-                }}
-              />
-            </Field>
-            <label className="flex items-center gap-2 text-xs">
-              <input
-                checked={media.decorative}
-                onChange={(event) => {
-                  updateMedia({ ...media, decorative: event.target.checked });
-                }}
-                type="checkbox"
-              />
-              Decorative media (no alt text needed)
-            </label>
-            {media.kind === "animation" ? (
-              <Field hint="Maximum 5 seconds" label="Duration (seconds)">
-                <Input
-                  max={5}
-                  min={0.1}
-                  onChange={(event) => {
-                    const durationSeconds = Number(event.target.value);
-                    updateMedia({
-                      ...media,
-                      durationSeconds: Number.isFinite(durationSeconds)
-                        ? durationSeconds
-                        : 0.1,
-                    });
-                  }}
-                  type="number"
-                  value={media.durationSeconds}
-                />
-              </Field>
-            ) : null}
-          </>
-        )}
-      </fieldset>
+      <SupportingMediaFields
+        maxDurationSeconds={CHALLENGE_MAX_ANIMATION_SECONDS}
+        media={media}
+        onChange={updateMedia}
+      />
       <Field label={t("editor.game.variant")}>
         <select
           className={SELECT_CLASS}
@@ -1603,6 +1695,11 @@ function SimulationForm({ block, onChange }: FormProps<"simulation">) {
           },
         }),
       )}
+      <MotionDefaultsFields
+        legend="Motion defaults"
+        motion={payload.motion}
+        onChange={(motion) => emit({ ...payload, motion })}
+      />
       {ids.map((id) => {
         const node = payload.nodes[id];
         return (
@@ -1619,6 +1716,18 @@ function SimulationForm({ block, onChange }: FormProps<"simulation">) {
                 }
               />
             </Field>
+            <MotionDefaultsFields
+              legend="Motion overrides"
+              motion={node.motion}
+              onChange={(motion) => updateNode(id, { ...node, motion })}
+            />
+            <SupportingMediaFields
+              maxDurationSeconds={SIMULATION_MAX_ANIMATION_SECONDS}
+              media={node.supportingMedia}
+              onChange={(supportingMedia) =>
+                updateNode(id, { ...node, supportingMedia })
+              }
+            />
             {id === payload.end
               ? null
               : node.options.map((option, index) => {

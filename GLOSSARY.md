@@ -53,5 +53,13 @@ The correct answer and explanatory guidance shown after an incorrect response.
 _Avoid_: Solution reveal
 
 **Supporting media**:
-Optional image or brief animation that enriches a Challenge without carrying its only learning-critical meaning.
+Optional image or brief animation that enriches a Challenge or a Simulation node without carrying its only learning-critical meaning.
 _Avoid_: Required media, timed mechanic
+
+**Motion pattern**:
+A named, catalogued UI motion applied to a Simulation beat (node enter, choice selected, feedback reveal, or summary enter). Authors pick from a fixed catalog; freeform CSS is not allowed.
+_Avoid_: Custom animation, CSS string
+
+**Motion beat**:
+One of the four presentation moments in a Simulation run where a Motion pattern may apply: node enter, choice selected, feedback reveal, or summary enter.
+_Avoid_: Step, frame, transition

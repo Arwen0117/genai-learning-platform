@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+import { MOTION_PATTERN_IDS } from "@/lib/simulation-motion";
+import {
+  CHALLENGE_MAX_ANIMATION_SECONDS,
+  SIMULATION_MAX_ANIMATION_SECONDS,
+} from "@/lib/supporting-media-duration";
+
 /**
  * Single source of truth for lesson blocks (docs/plan/01 §3).
  *
@@ -214,15 +220,83 @@ const supportingMediaBaseSchema = z.object({
   decorative: z.boolean(),
 });
 
-export const supportingMediaSchema = z.discriminatedUnion("kind", [
-  supportingMediaBaseSchema.extend({
-    kind: z.literal("image"),
-  }),
-  supportingMediaBaseSchema.extend({
-    kind: z.literal("animation"),
-    durationSeconds: z.number().positive().max(5),
-  }),
-]);
+/**
+ * Supporting media schema parameterized by animation duration max.
+ * Challenge callers keep 5s; Simulation uses 10s via the shared factory.
+ */
+export function supportingMediaSchemaFor(maxDurationSeconds: number) {
+  return z.discriminatedUnion("kind", [
+    supportingMediaBaseSchema.extend({
+      kind: z.literal("image"),
+    }),
+    supportingMediaBaseSchema.extend({
+      kind: z.literal("animation"),
+      durationSeconds: z.number().positive().max(maxDurationSeconds),
+    }),
+  ]);
+}
+
+/** Challenge / Game Activity Supporting media (animation ≤ 5s). */
+export const supportingMediaSchema = supportingMediaSchemaFor(
+  CHALLENGE_MAX_ANIMATION_SECONDS,
+);
+
+/** Simulation node Supporting media (animation ≤ 10s). */
+export const simulationSupportingMediaSchema = supportingMediaSchemaFor(
+  SIMULATION_MAX_ANIMATION_SECONDS,
+);
+
+const motionPatternSchema = z.enum(MOTION_PATTERN_IDS);
+
+const simulationMotionDefaultsSchema = z
+  .object({
+    nodeEnter: motionPatternSchema.optional(),
+    choiceSelected: motionPatternSchema.optional(),
+    feedbackReveal: motionPatternSchema.optional(),
+    summaryEnter: motionPatternSchema.optional(),
+  })
+  .strict();
+
+function addSupportingMediaIssues(
+  media: z.infer<typeof supportingMediaSchema>,
+  ctx: z.RefinementCtx,
+  path: (string | number)[],
+): void {
+  if (media.approvalStatus !== "approved") {
+    ctx.addIssue({
+      code: "custom",
+      path: [...path, "approvalStatus"],
+      message: "Supporting media requires instructor approval.",
+    });
+  }
+  if (media.moderationStatus !== "passed") {
+    ctx.addIssue({
+      code: "custom",
+      path: [...path, "moderationStatus"],
+      message: "Supporting media must pass safety moderation.",
+    });
+  }
+  if (!media.decorative && media.altText === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: [...path, "altText"],
+      message:
+        "Supporting media needs editable alt text or a decorative designation.",
+    });
+  }
+  if (
+    media.provenance.source === "model-generated" &&
+    (media.provenance.model === undefined ||
+      media.provenance.generatedAt === undefined)
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: [...path, "provenance"],
+      message:
+        "Model-generated media needs model and generation timestamp provenance.",
+    });
+  }
+}
 
 const gameChallengeMetadataSchema = z.object({
   feedback: gameFeedbackSchema.optional(),
@@ -272,38 +346,7 @@ export const gameBlockSchema = blockBaseSchema
   .superRefine((block, ctx) => {
     const media = block.payload.supportingMedia;
     if (media === undefined) return;
-    if (media.approvalStatus !== "approved") {
-      ctx.addIssue({
-        code: "custom",
-        path: ["payload", "supportingMedia", "approvalStatus"],
-        message: "Supporting media requires instructor approval.",
-      });
-    }
-    if (media.moderationStatus !== "passed") {
-      ctx.addIssue({
-        code: "custom",
-        path: ["payload", "supportingMedia", "moderationStatus"],
-        message: "Supporting media must pass safety moderation.",
-      });
-    }
-    if (!media.decorative && media.altText === undefined) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["payload", "supportingMedia", "altText"],
-        message: "Supporting media needs editable alt text or a decorative designation.",
-      });
-    }
-    if (
-      media.provenance.source === "model-generated" &&
-      (media.provenance.model === undefined ||
-        media.provenance.generatedAt === undefined)
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["payload", "supportingMedia", "provenance"],
-        message: "Model-generated media needs model and generation timestamp provenance.",
-      });
-    }
+    addSupportingMediaIssues(media, ctx, ["payload", "supportingMedia"]);
   });
 
 /** One choice offered by a simulation node. */
@@ -317,14 +360,17 @@ export const simulationOptionSchema = z.object({
 });
 
 /**
- * One step of a simulation: what happens next, and the ways out of it.
+ * One node of a simulation: what happens next, and the ways out of it.
  *
  * `options` is only required on nodes the learner has to leave: the `end` node
- * is a closing statement with nothing left to choose.
+ * is a closing statement with nothing left to choose. Optional motion overrides
+ * and Supporting media enrich presentation without changing scoring.
  */
 export const simulationNodeSchema = z.object({
   text: z.string().min(1),
   options: z.array(simulationOptionSchema),
+  motion: simulationMotionDefaultsSchema.optional(),
+  supportingMedia: simulationSupportingMediaSchema.optional(),
 });
 
 /** `simulation` — a branching scenario walked one decision at a time. */
@@ -335,6 +381,8 @@ export const simulationBlockSchema = blockBaseSchema
       intro: z.string().min(1),
       start: z.string().min(1),
       end: z.string().min(1),
+      /** Optional block-level motion defaults for the four beats. */
+      motion: simulationMotionDefaultsSchema.optional(),
       nodes: z.record(z.string(), simulationNodeSchema),
     }),
   })
@@ -365,6 +413,14 @@ export const simulationBlockSchema = blockBaseSchema
             message: `Unknown target: ${option.next}`,
           });
       });
+      if (node.supportingMedia !== undefined) {
+        addSupportingMediaIssues(node.supportingMedia, ctx, [
+          "payload",
+          "nodes",
+          id,
+          "supportingMedia",
+        ]);
+      }
     }
     if (nodes[end]?.options.length)
       ctx.addIssue({

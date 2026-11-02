@@ -51,7 +51,12 @@ import { useI18n } from "@/i18n/client";
 import { createBlock, createGameActivity } from "./block-templates";
 import { StructurePanel } from "./structure-panel";
 import { GameActivityEditorPanel } from "./game-activity-editor-panel";
+import { lessonGenerateContext } from "./lesson-generate-context";
 import { swapItems } from "./editor-utils";
+import {
+  generateGameActivity,
+  generateSimulationBlock,
+} from "@/server/teach";
 
 /**
  * Three-column course editor (P5.1).
@@ -1189,14 +1194,16 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
         />
 
         <div className="space-y-4">
-          <GameActivityEditorPanel
-            activity={selectedLesson?.gameActivity}
-            errors={lessonIssues}
-            onChange={updateGameActivity}
-            onSelectChallenge={selectBlock}
-            challengeIssues={issues.challenges}
-            selectedChallengeId={selectedBlockId}
-          />
+          {selectedLesson?.gameActivity !== undefined ? (
+            <GameActivityEditorPanel
+              activity={selectedLesson.gameActivity}
+              errors={lessonIssues}
+              onChange={updateGameActivity}
+              onSelectChallenge={selectBlock}
+              challengeIssues={issues.challenges}
+              selectedChallengeId={selectedBlockId}
+            />
+          ) : null}
           <BlockListPanel
             blockIssues={issues.blocks}
             lesson={selectedLesson}
@@ -1264,6 +1271,40 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
               deleteBlock(selectedBlock.id);
             }
           }}
+          gameActivity={selectedLesson?.gameActivity}
+          onApplyGameActivity={(activity) => {
+            updateGameActivity(activity);
+            const firstChallenge = activity.challenges[0];
+            if (firstChallenge !== undefined) {
+              selectBlock(firstChallenge.id);
+            }
+          }}
+          onGenerateGameActivity={
+            selectedLesson === null
+              ? undefined
+              : async () => {
+                  const context = lessonGenerateContext({
+                    title: selectedLesson.title,
+                    blocks: selectedLesson.blocks.filter(
+                      (block) => block.type !== "game",
+                    ),
+                  });
+                  return generateGameActivity(context);
+                }
+          }
+          onGenerateSimulation={
+            selectedLesson === null
+              ? undefined
+              : async () => {
+                  const context = lessonGenerateContext({
+                    title: selectedLesson.title,
+                    blocks: selectedLesson.blocks.filter(
+                      (entry) => entry.id !== selectedBlock?.id,
+                    ),
+                  });
+                  return generateSimulationBlock(context);
+                }
+          }
           onProblem={(message) => {
             if (selectedBlock !== null) {
               setProblem(selectedBlock.id, message);

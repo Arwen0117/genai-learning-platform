@@ -19,6 +19,10 @@ export type GameActivityEditorPanelProps = {
   onSelectChallenge: (challengeId: string) => void;
 };
 
+/**
+ * Middle-column Game Activity list: title, Challenges, reorder/duplicate/delete.
+ * Generate with AI lives on the right-hand block editor when a Challenge is selected.
+ */
 export function GameActivityEditorPanel({
   activity,
   errors,
@@ -29,7 +33,10 @@ export function GameActivityEditorPanel({
 }: GameActivityEditorPanelProps) {
   const t = useT();
 
-  if (activity === undefined) return null;
+  if (activity === undefined) {
+    return null;
+  }
+
   const currentActivity = activity;
 
   function update(patch: Partial<GameActivityContainer>): void {

@@ -34,6 +34,11 @@ import {
   generatedGameActivitySchema,
   type GeneratedGameActivity,
 } from "@/lib/llm/prompts/game-activity";
+import {
+  generatedSimulationBlockSchema,
+  simulationBlockPrompt,
+  type GeneratedSimulationBlock,
+} from "@/lib/llm/prompts/simulation-block";
 import type { Translator } from "@/i18n/translate";
 import { prisma } from "@/lib/prisma";
 import {
@@ -64,6 +69,10 @@ export type LessonResult =
 
 export type GameActivityResult =
   | { ok: true; activity: GeneratedGameActivity }
+  | { ok: false; error: string };
+
+export type SimulationBlockResult =
+  | { ok: true; block: GeneratedSimulationBlock }
   | { ok: false; error: string };
 
 export type SaveDraftResult =
@@ -103,6 +112,10 @@ const gameActivityInputSchema = z.object({
 });
 
 export type GameActivityInput = z.input<typeof gameActivityInputSchema>;
+
+/** Same lesson-scoped fields as Game Activity generate; dedicated Simulation action. */
+const simulationBlockInputSchema = gameActivityInputSchema;
+export type SimulationBlockInput = z.input<typeof simulationBlockInputSchema>;
 
 export type LessonInput = z.input<typeof lessonInputSchema>;
 
@@ -399,6 +412,36 @@ export async function generateGameActivity(
       };
     }
     return { ok: true, activity };
+  } catch (error: unknown) {
+    return { ok: false, error: describeFailure("lesson", error, t) };
+  }
+}
+
+/** Generates one Simulation Block from lesson-scoped editor context. */
+export async function generateSimulationBlock(
+  input: SimulationBlockInput,
+): Promise<SimulationBlockResult> {
+  const { locale, t } = await getI18n();
+  const parsedInput = simulationBlockInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    return { ok: false, error: t("server.teach.lessonInvalid") };
+  }
+
+  const instructor = await requireInstructor(t);
+  if (!instructor.ok) return { ok: false, error: instructor.error };
+
+  registerLlmMocks();
+  const language = contentLanguageFromLocale(locale);
+  const prompt = simulationBlockPrompt({ ...parsedInput.data, language });
+
+  try {
+    const block = await generateJson(generatedSimulationBlockSchema, prompt, {
+      usage: "course-simulation-block",
+      userId: instructor.userId,
+      input: parsedInput.data,
+      temperature: 0.4,
+    });
+    return { ok: true, block };
   } catch (error: unknown) {
     return { ok: false, error: describeFailure("lesson", error, t) };
   }

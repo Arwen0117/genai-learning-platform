@@ -1,4 +1,8 @@
 import type { SupportingMedia } from "@/lib/blocks/schema";
+import {
+  CHALLENGE_MAX_ANIMATION_SECONDS,
+  clampAnimationDuration,
+} from "@/lib/supporting-media-duration";
 
 export type SupportingMediaDraftInput = {
   kind: "image" | "animation";
@@ -6,6 +10,8 @@ export type SupportingMediaDraftInput = {
   decorative?: boolean;
   altText?: string;
   durationSeconds?: number;
+  /** Context max for animation drafts; Challenge default is 5s. */
+  maxDurationSeconds?: number;
 };
 
 export type SupportingMediaProvider = {
@@ -78,10 +84,15 @@ export async function createSupportingMediaDraft(
   };
 
   if (input.kind === "animation") {
+    const maxDurationSeconds =
+      input.maxDurationSeconds ?? CHALLENGE_MAX_ANIMATION_SECONDS;
     return {
       ...base,
       kind: "animation",
-      durationSeconds: Math.min(input.durationSeconds ?? 5, 5),
+      durationSeconds: clampAnimationDuration(
+        input.durationSeconds,
+        maxDurationSeconds,
+      ),
     };
   }
 

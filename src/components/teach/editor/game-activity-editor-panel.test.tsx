@@ -70,6 +70,24 @@ describe("GameActivityEditorPanel", () => {
     cleanup();
   });
 
+  it("renders nothing when the lesson has no Game Activity", () => {
+    const view = render(
+      <I18nProvider locale="en" messages={en}>
+        <GameActivityEditorPanel
+          activity={undefined}
+          challengeIssues={{}}
+          errors={[]}
+          onChange={vi.fn()}
+          onSelectChallenge={vi.fn()}
+          selectedChallengeId={null}
+        />
+      </I18nProvider>,
+    );
+
+    expect(view.queryByText("Game Activity")).toBeNull();
+    expect(view.queryByRole("button", { name: "Generate with AI" })).toBeNull();
+  });
+
   it("edits the activity title and reorders Challenges through visible controls", () => {
     const onChange = vi.fn();
     const view = renderPanel(onChange);
