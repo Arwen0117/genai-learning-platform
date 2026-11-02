@@ -102,6 +102,24 @@ model Lesson {
   progress         LessonProgress[]
   activityAttempts ActivityAttempt[]
   playthroughs     Playthrough[]
+  gameActivityVersions GameActivityVersion[]
+}
+
+/// Immutable published snapshot of one Game Activity. Playthroughs bind to the
+/// version that was live when the run started so later edits cannot rewrite history.
+model GameActivityVersion {
+  id          String   @id @default(cuid())
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  activityId  String
+  version     Int
+  contentHash String
+  snapshot    Json
+  createdAt   DateTime @default(now())
+  playthroughs Playthrough[]
+
+  @@unique([lessonId, activityId, version])
+  @@index([lessonId, activityId, createdAt])
 }
 
 model Enrollment {
@@ -211,6 +229,9 @@ model Playthrough {
   lessonId            String
   lesson              Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   activityId          String
+  publishedVersionId  String?
+  publishedVersion    GameActivityVersion? @relation(fields: [publishedVersionId], references: [id], onDelete: SetNull)
+  contentHash         String?
   clientCorrelationId String?
   status              String   @default("IN_PROGRESS")
   completedAt         DateTime?
@@ -220,4 +241,5 @@ model Playthrough {
 
   @@index([userId, lessonId, activityId, createdAt])
   @@index([userId, lessonId, activityId, status])
+  @@index([publishedVersionId])
 }

@@ -248,11 +248,11 @@ const chooseGamePayloadSchema = z
   })
   .merge(gameChallengeMetadataSchema)
   .refine((payload) => payload.options.filter((option) => option.correct).length === 1, {
-    message: "Choose games must have exactly one correct option.",
+    message: "Choose Challenges must have exactly one correct option.",
     path: ["options"],
   });
 
-/** `game` — an ordering, matching, or single-correct choice puzzle. */
+/** `game` — Challenge payload for Sort, Match, or Choose inside a Game Activity. */
 export const gameBlockSchema = blockBaseSchema
   .extend({
     type: z.literal("game"),

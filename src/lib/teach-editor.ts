@@ -3,6 +3,7 @@ import { z } from "zod";
 import { blockListSchema, type Block } from "@/lib/blocks/schema";
 import {
   gameActivityContainerSchema,
+  normalizeLessonGameActivity,
   type GameActivityContainer,
   validateGameActivity,
 } from "@/lib/game-activity";
@@ -177,19 +178,24 @@ export const editorCourseSchema = z
     if (course.status === "PUBLISHED") {
       for (const [moduleIndex, courseModule] of course.modules.entries()) {
         for (const [lessonIndex, lesson] of courseModule.lessons.entries()) {
-          const legacyChallenges = lesson.blocks.filter(
-            (block): block is Extract<Block, { type: "game" }> =>
-              block.type === "game",
+          const normalized = normalizeLessonGameActivity({
+            lessonId: lesson.id,
+            lessonTitle: lesson.title,
+            blocks: lesson.blocks,
+            gameActivity: lesson.gameActivity,
+          });
+          const leftoverGames = normalized.blocks.filter(
+            (block) => block.type === "game",
           );
-          const activity = lesson.gameActivity ?? (
-            legacyChallenges.length > 0
-              ? {
-                  id: `legacy-${lesson.id}`,
-                  title: lesson.title,
-                  challenges: legacyChallenges,
-                }
-              : undefined
-          );
+          if (leftoverGames.length > 0) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["modules", moduleIndex, "lessons", lessonIndex, "blocks"],
+              message:
+                "Move Game Challenges into one Game Activity before publishing.",
+            });
+          }
+          const activity = normalized.gameActivity;
           if (activity === undefined) continue;
           const result = validateGameActivity(activity, course.language);
           if (!result.ok) {

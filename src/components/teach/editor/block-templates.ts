@@ -47,11 +47,6 @@ export const BLOCK_TYPE_INFO = [
     descriptionKey: "editor.template.coding.description",
   },
   {
-    type: "game",
-    labelKey: "block.game",
-    descriptionKey: "editor.template.game.description",
-  },
-  {
     type: "simulation",
     labelKey: "block.simulation",
     descriptionKey: "editor.template.simulation.description",

@@ -35,14 +35,12 @@ describe("MatchGame learner behavior", () => {
 
     fireEvent.click(left("One"));
     fireEvent.click(rightButtons().find((button) => button.textContent === "Second")!);
+    expect(onComplete).toHaveBeenCalledOnce();
     vi.advanceTimersByTime(600);
     fireEvent.click(left("One"));
     fireEvent.click(rightButtons().find((button) => button.textContent === "First")!);
     fireEvent.click(left("Two"));
     fireEvent.click(rightButtons().find((button) => button.textContent === "Second")!);
-    fireEvent.click(
-      within(view.container).getByRole("button", { name: "Mark as complete" }),
-    );
 
     expect(onFinish).toHaveBeenLastCalledWith(expect.objectContaining({
       variant: "match",
@@ -98,7 +96,7 @@ describe("MatchGame learner behavior", () => {
     vi.useRealTimers();
   });
 
-  it("allows completing an attempted Challenge after an incorrect match", () => {
+  it("completes an attempted Challenge after an incorrect match", () => {
     vi.useFakeTimers();
     const onComplete = vi.fn();
     const view = render(
@@ -121,12 +119,9 @@ describe("MatchGame learner behavior", () => {
     });
     fireEvent.click(left);
     fireEvent.click(second);
-    const complete = within(view.container).getByRole("button", {
-      name: "Mark as complete",
-    });
-    expect(complete.hasAttribute("disabled")).toBe(false);
-    fireEvent.click(complete);
-
+    expect(
+      view.getAllByText("Correction: One → First").length,
+    ).toBeGreaterThan(0);
     expect(onComplete).toHaveBeenCalledOnce();
     vi.useRealTimers();
   });

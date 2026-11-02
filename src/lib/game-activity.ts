@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { gameBlockSchema, type GameBlock } from "@/lib/blocks/schema";
+import {
+  gameBlockSchema,
+  type Block,
+  type GameBlock,
+} from "@/lib/blocks/schema";
 import type { ContentLanguage } from "@/lib/llm/language";
 
 export const gameChallengeSchema = gameBlockSchema.superRefine((block, ctx) => {
@@ -14,9 +18,7 @@ export const gameChallengeSchema = gameBlockSchema.superRefine((block, ctx) => {
 });
 
 /**
- * First-class activity boundary. The legacy array schema remains exported
- * while callers migrate, but new surfaces can validate an activity without
- * losing its identity, title, or Challenge ordering.
+ * First-class Game Activity boundary: identity, title, and ordered Challenges.
  */
 export const gameActivityContainerSchema = z
   .object({
@@ -35,9 +37,55 @@ export const gameActivityContainerSchema = z
     }
   });
 
+/** Challenge list shape used inside a Game Activity container. */
 export const gameActivitySchema = z.array(gameChallengeSchema).length(5);
 export type GameActivity = z.infer<typeof gameActivitySchema>;
 export type GameActivityContainer = z.infer<typeof gameActivityContainerSchema>;
+
+/**
+ * Moves standalone `game` Challenges out of lesson blocks into one Game
+ * Activity container so learners and editors share a single activity boundary.
+ */
+export function normalizeLessonGameActivity(input: {
+  lessonId: string;
+  lessonTitle: string;
+  blocks: Block[];
+  gameActivity?: GameActivityContainer | null;
+}): { blocks: Block[]; gameActivity?: GameActivityContainer } {
+  const existing = input.gameActivity
+    ? gameActivityContainerSchema.safeParse(input.gameActivity)
+    : null;
+  if (existing?.success) {
+    return {
+      blocks: input.blocks.filter((block) => block.type !== "game"),
+      gameActivity: existing.data,
+    };
+  }
+
+  const legacyChallenges = input.blocks.filter(
+    (block): block is GameBlock => block.type === "game",
+  );
+  if (legacyChallenges.length !== 5) {
+    return {
+      blocks: input.blocks,
+      ...(input.gameActivity ? { gameActivity: input.gameActivity } : {}),
+    };
+  }
+
+  const migrated = gameActivityContainerSchema.safeParse({
+    id: `legacy-${input.lessonId}`,
+    title: input.lessonTitle,
+    challenges: legacyChallenges,
+  });
+  if (!migrated.success) {
+    return { blocks: input.blocks };
+  }
+
+  return {
+    blocks: input.blocks.filter((block) => block.type !== "game"),
+    gameActivity: migrated.data,
+  };
+}
 
 type ValidationResult =
   | { ok: true }
@@ -90,28 +138,20 @@ export function validateGameActivity(
   input: unknown,
   language: ContentLanguage,
 ): ValidationResult {
-  const isContainer =
-    typeof input === "object" && input !== null && !Array.isArray(input);
-  const parsed = isContainer
-    ? gameActivityContainerSchema.safeParse(input)
-    : gameActivitySchema.safeParse(input);
+  const parsed = gameActivityContainerSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, errors: parsed.error.issues.map((issue) => issue.message) };
   }
 
-  const challenges: GameActivity =
-    isContainer
-      ? (parsed.data as GameActivityContainer).challenges
-      : (parsed.data as GameActivity);
+  const activity = parsed.data;
+  const challenges: GameActivity = activity.challenges;
   const errors: string[] = [];
-  if (isContainer) {
-    const title = localeText((parsed.data as GameActivityContainer).title);
-    if (
-      (language === "en" && hasChinese(title)) ||
-      (language === "zh" && hasLatin(title))
-    )
-      errors.push("The Game Activity title does not match the lesson locale.");
-  }
+  const title = localeText(activity.title);
+  if (
+    (language === "en" && hasChinese(title)) ||
+    (language === "zh" && hasLatin(title))
+  )
+    errors.push("The Game Activity title does not match the lesson locale.");
   const variants = new Set(challenges.map((block) => block.payload.variant));
   for (const variant of ["sort", "match", "choose"] as const) {
     if (!variants.has(variant))

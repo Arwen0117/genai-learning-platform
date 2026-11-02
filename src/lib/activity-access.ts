@@ -14,7 +14,12 @@ function storedBlocks(lesson: {
         .flatMap((p) => (p.success ? [p.data] : []))
     : [];
   const activity = gameActivityContainerSchema.safeParse(lesson.gameActivity);
-  return activity.success ? [...blocks, ...activity.data.challenges] : blocks;
+  if (!activity.success) return blocks;
+  // Challenges live only in the Game Activity container once it exists.
+  return [
+    ...blocks.filter((block) => block.type !== "game"),
+    ...activity.data.challenges,
+  ];
 }
 
 /**

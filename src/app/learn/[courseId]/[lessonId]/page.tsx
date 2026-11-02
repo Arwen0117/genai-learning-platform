@@ -160,7 +160,7 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
   const overriddenBlockIds = new Set(overrideRows.map((row) => row.blockId));
 
   const parsedBlocks = blockListSchema.safeParse(lessonRow?.blocks);
-  const blocks = applyBlockOverrides(
+  const rawBlocks = applyBlockOverrides(
     parsedBlocks.success ? parsedBlocks.data : [],
     overrideRows,
   );
@@ -170,6 +170,11 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
   const gameActivity = parsedGameActivity.success
     ? parsedGameActivity.data
     : null;
+  // Challenges render inside the Game Activity boundary, not as standalone blocks.
+  const blocks =
+    gameActivity === null
+      ? rawBlocks
+      : rawBlocks.filter((block) => block.type !== "game");
   const activityChallenges = gameActivity?.challenges ?? [];
   const learnerActivities = [...blocks, ...activityChallenges];
 
@@ -333,7 +338,7 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
             >
               <header>
                 <p className="text-xs font-medium uppercase tracking-wide text-primary">
-                  Game Activity
+                  {t("lesson.gameActivity.label")}
                 </p>
                 <h2
                   className="mt-1 text-lg font-semibold"

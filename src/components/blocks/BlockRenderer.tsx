@@ -146,7 +146,9 @@ export function BlockRenderer(props: BlockRendererProps) {
     <section className="rounded-xl ring-1 ring-foreground/10">
       <header className="flex items-center gap-2 border-b px-4 py-3">
         <h2 className="text-sm font-medium">{block.title}</h2>
-        <Badge variant="secondary">{block.type}</Badge>
+        <Badge variant="secondary">
+          {block.type === "game" ? t("block.challenge") : block.type}
+        </Badge>
         {overridden ? (
           <Badge variant="outline">{t("block.renderer.personalised")}</Badge>
         ) : null}

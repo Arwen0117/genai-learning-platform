@@ -61,6 +61,27 @@ describe("activity access / preview isolation", () => {
     expect(access.blocks).toContainEqual(challenge);
     expect(access.activityId).toBe("activity-1");
   });
+
+  it("does not double-count legacy game blocks once a Game Activity exists", async () => {
+    mocks.lesson.mockResolvedValue({
+      blocks: [block, challenge],
+      gameActivity: {
+        id: "activity-1",
+        title: "Practice",
+        challenges: Array.from({ length: 5 }, (_, index) => ({
+          ...challenge,
+          id: `challenge-${index + 1}`,
+        })),
+      },
+      module: { course: { id: "c", status: "PUBLISHED" } },
+    });
+
+    const access = await activityAccess("l", "challenge-1");
+    expect(access.blocks.filter((item) => item.id === "challenge-1")).toHaveLength(
+      1,
+    );
+    expect(access.blocks.some((item) => item.id === "b")).toBe(true);
+  });
   it("rejects a later Game Activity Challenge until earlier Challenges are complete", async () => {
     await expect(activityAccess("l", "challenge-2")).rejects.toThrow(
       "Complete Game Activity Challenges in order.",

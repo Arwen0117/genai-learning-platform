@@ -10,21 +10,15 @@ Status values:
 
 ## Current progress
 
-Four of the fourteen follow-up tasks have been completed. Task 1 is now in
-progress because the shared validator accepts an explicit activity boundary
-with an identity, title, and ordered Challenges, while legacy array callers
-still need migration. Task 5 remains in progress because learner-facing
-history now has qualitative Correction, Hint, and Playthrough response
-details, but ordered Challenge progress requires the migrated Game Activity
-container. Task 12 remains in progress because GitHub branch protection must
-still make the verification workflow a required check. Tasks 13 and 14 are
-complete.
+Thirteen of fourteen follow-up tasks are complete. Task 12 still needs a human
+to enable the GitHub required status check; run
+`.scratch/game-activity/require-verify-check.sh` to finish that step.
 
 ## Implementation backlog
 
 ### 1. Replace independent game blocks with one Game Activity
 
-- **Status:** [~]
+- **Status:** [x]
 - **Blocked by:** None
 - **Finding:** The agreed model is one Game Activity containing an ordered sequence of Challenges, but the current implementation represents the activity as five independent Game Activity blocks.
 - **Work:**
@@ -33,26 +27,14 @@ complete.
   - Add activity-level progress, completion, replay, and authoring boundaries.
   - Update learner rendering and lesson composition to use the container.
 - **Done when:** A learner sees one Game Activity with ordered Challenge progress, and the editor/generator operate on that same model.
-- **Progress:** Added a first-class `id`/`title`/ordered `challenges` schema and
-  validator support, including unique Challenge identity checks. Direct Game
-  Activity generation now returns that container and validates it. Generated
-  lesson results now preserve it as `gameActivity` instead of flattening its
-  Challenges into legacy blocks, and instructor draft persistence now stores
-  the container separately. The learner lesson page now loads the persisted container,
-  renders its ordered Challenges inside one Game Activity boundary, and counts
-  those Challenges in lesson progress. The editor now preserves and validates
-  the container during load/save; full Challenge authoring remains. A public
-  progression helper now derives the next ordered Challenge and activity
-  completion from persisted completed Challenge IDs, and the learner page uses
-  it for activity completion and progress messaging. Learner submissions now
-  enforce the next ordered Challenge at the activity access boundary, and the
-  learner renderer presents later Challenges as locked until their turn.
-  Persisted Challenge attempts and engagement events now carry the parent
-  Game Activity identity when one exists, while legacy blocks remain
-  activity-id free.
+- **Progress:** Container schema, learner boundary, ordered access, editor, and
+  generation are in place. Legacy standalone `game` blocks migrate into the
+  container on save, are stripped from lesson `blocks` when a container exists,
+  and can no longer be added from the block picker. Validation requires the
+  explicit container shape.
 
 ### 2. Separate attempted, correct, and completed states
-- **Status:** [~]
+- **Status:** [x]
 - **Blocked by:** 1
 - **Finding:** Current grading requires a Challenge to be solved correctly before it completes, which conflicts with the agreed rule that learners continue after mistakes and completion follows attempted Challenges.
 - **Work:**
@@ -62,18 +44,11 @@ complete.
   - Advance to the next Challenge after incorrect submission.
   - Complete the Game Activity after all Challenges are attempted.
 - **Done when:** An incorrect first response is recorded, explained, and does not block activity completion.
-- **Progress:** Sort, Match, and Choose now expose Correction after an
-  incorrect submission and allow the learner to complete the attempted
-  Challenge without a correct retry. Activity-level continuation remains
-  blocked on the Game Activity container. The progression helper now treats
-  attempted/completed Challenge IDs as the ordered activity progression input,
-  and server access rejects later Challenges until earlier ones are complete.
-  The learner UI now mirrors that ordering with locked Challenge states.
-  Attempt records also preserve the parent activity identity for future
-  Playthrough-level history, and persisted submissions now include an explicit
-  `attempted` flag separate from `passed`, `firstPass`, and `completed`.
-  Hint signals are excluded from substantive-attempt state, and compatibility
-  progress events include the same server-derived activity identity.
+- **Progress:** Server grading records `attempted` / `passed` / `firstPass` /
+  `completed` separately, reveals Correction, and completes after an incorrect
+  substantive response. Sort, Match, and Choose now auto-complete the Challenge
+  after the first attempt so ordered activity progression continues without a
+  manual “Mark as complete” click.
 
 ### 3. Unify all generation paths around the Game Activity contract
 
@@ -111,7 +86,7 @@ complete.
   deletion with visible activity-level validation errors.
 
 ### 5. Remove learner-facing numeric game scores
-- **Status:** [~]
+- **Status:** [x]
 - **Blocked by:** 2
 - **Finding:** The agreed design defers numeric scores, but shared activity history renders percentages and raw/max scores.
 - **Work:**
@@ -119,16 +94,13 @@ complete.
   - Hide numeric score, percentage, and raw/max score from learner-facing Game Activity history.
   - Show progress, completion, Correction, Hint state, and qualitative feedback instead.
 - **Done when:** Learners never see numeric scoring for Game Activities.
-- **Progress:** Numeric scores are hidden from the Game Activity history summary
-  and raw grading JSON is hidden, but the history still needs dedicated
-  progress, Correction, and Hint presentation. The history now presents
-  Correction and Hint states qualitatively and labels persisted response
-  counts as Playthrough history. True ordered Challenge progress remains
-  blocked on the Game Activity container.
+- **Progress:** Numeric scores stay hidden from Game Activity history. History
+  presents qualitative Correction, Hint, and Playthrough response details, and
+  the learner Game Activity header shows ordered Challenge progress.
 
 ### 6. Establish explicit published content versions
 
-- **Status:** [ ]
+- **Status:** [x]
 - **Blocked by:** 1 and 4
 - **Finding:** Current persistence derives a short block hash and stores a snapshot, but there is no explicit Game Activity publication/version lifecycle.
 - **Work:**
@@ -137,10 +109,14 @@ complete.
   - Create a new version when an instructor edits a published activity.
   - Keep historical results immutable and tied to their original version.
 - **Done when:** Editing an activity cannot change the interpretation of historical Playthroughs.
+- **Progress:** `GameActivityVersion` stores immutable published snapshots and
+  content hashes. Publishing creates a new version when the activity hash
+  changes. Playthroughs bind to `publishedVersionId` / `contentHash`, and
+  recovery filters by the live published version hash.
 
 ### 7. Make Playthrough persistence first-class
 
-- **Status:** [~]
+- **Status:** [x]
 - **Blocked by:** 1, 2, and 6
 - **Finding:** Recovery is reconstructed from block-level attempts and a client-provided playthrough ID.
 - **Work:**
@@ -149,15 +125,13 @@ complete.
   - Treat client IDs as correlation values, not authoritative identity.
   - Support refresh recovery, Replay, first-pass results, retries, Hint use, timestamps, and completion.
 - **Done when:** The server can recover and report a Playthrough without inferring the activity state from loosely related block attempts.
-- **Progress:** A server-owned Playthrough record now groups persisted Game
-  Activity Challenge attempts, tracks completion, and is used for refresh
-  recovery. Client playthrough IDs remain correlation metadata. Full
-  activity-wide history presentation and publication-version binding remain
-  pending.
+- **Progress:** Server-owned Playthrough records group Challenge attempts,
+  track completion, bind to published versions, and drive refresh recovery.
+  Client playthrough IDs remain correlation metadata only.
 
 ### 8. Complete the model-generated Supporting media lifecycle
 
-- **Status:** [ ]
+- **Status:** [x]
 - **Blocked by:** 3 and 4
 - **Finding:** The schema accepts model-generated media metadata, but there is no complete generation, moderation, storage, review, and approval lifecycle.
 - **Work:**
@@ -168,9 +142,13 @@ complete.
   - Keep text as the complete learning path.
   - Keep animation optional, skippable, non-blocking, and capped at five seconds.
 - **Done when:** Approved Supporting media can be safely published and rejected media cannot enter a learner-facing activity.
+- **Progress:** Local draft provider writes public `/media/drafts/...` paths,
+  moderation gates unsafe prompts, approval requires passed moderation plus alt
+  text or decorative designation, and the learner renderer only shows approved
+  moderated media. Publish-time schema checks remain in place.
 
 ### 9. Replace heuristic locale checks with explicit content-language validation
-- **Status:** [~]
+- **Status:** [x]
 - **Blocked by:** 3
 - **Finding:** Locale validation currently checks only for Chinese and Latin characters, which can reject legitimate technical content or miss other mismatches.
 - **Work:**
@@ -178,12 +156,12 @@ complete.
   - Define exceptions for identifiers, URLs, code, and technical terminology.
   - Keep mixed-language failures explicit for instructor review.
 - **Done when:** Valid technical content is accepted without weakening detection of unintended mixed-language generated content.
-- **Progress:** Locale validation now ignores approved technical terms,
-  identifiers, URLs, email addresses, and inline code while continuing to
-  reject unintended mixed-language prose.
+- **Progress:** Locale validation uses the supported `ContentLanguage` model and
+  ignores approved technical terms, identifiers, URLs, email addresses, and
+  inline code while continuing to reject unintended mixed-language prose.
 
 ### 10. Expand learner behavior tests
-- **Status:** [~]
+- **Status:** [x]
 - **Blocked by:** 1 and 2
 - **Finding:** Sort, Match, and Choose have component tests, but the agreed activity-level behavior is not covered as one external flow.
 - **Work:**
@@ -194,13 +172,13 @@ complete.
   - Test first-pass versus retry history.
   - Test keyboard, screen-reader announcements, and non-drag interaction paths.
 - **Done when:** The agreed learner behavior is covered through public behavior rather than component internals.
-- **Progress:** Public component tests cover incorrect continuation, Correction,
-  Hint use, Replay, recovery, keyboard movement, and non-drag interaction.
-  Activity-level progression and refresh behavior remain blocked on the
-  Game Activity container and first-class Playthrough model.
+- **Progress:** Challenge component tests cover incorrect continuation,
+  Correction, Hint, Replay, recovery, and keyboard paths. Activity-level tests
+  cover ordered progression after incorrect attempts, activity completion, and
+  published-version / Playthrough binding.
 
 ### 11. Update terminology and documentation
-- **Status:** [~]
+- **Status:** [x]
 - **Blocked by:** 1
 - **Finding:** Comments still describe the renderer as dispatching over “the two mini-games,” and some code comments use the earlier block-oriented language.
 - **Work:**
@@ -208,10 +186,9 @@ complete.
   - Remove stale descriptions of the two-game model.
   - Keep the glossary as the domain-language source of truth.
 - **Done when:** Public comments, types, tests, and docs describe the same domain model.
-- **Progress:** Stale renderer and generation comments now use Game Activity
-  Challenge terminology. Remaining block-oriented types and editor surfaces
-  will be updated with the Game Activity container. README and generation
-  prompt wording now also use the canonical Game Activity terminology.
+- **Progress:** Comments, prompts, learner labels, and Challenge badges use
+  glossary terminology. Storage still uses `type: "game"` as the Challenge
+  payload discriminator.
 
 ## Environment and guardrail backlog
 
@@ -223,8 +200,9 @@ complete.
   - Run `npm run verify` on pull requests and the main branch.
   - Report failures as required checks.
 - **Done when:** A pull request cannot merge without the repository’s existing verification command passing.
-- **Progress:** `.github/workflows/verify.yml` runs `npm run verify`; configure
-  the workflow as a required branch-protection check in GitHub.
+- **Progress:** `.github/workflows/verify.yml` runs `npm run verify`. Remaining
+  step: enable it as a required branch-protection check with
+  `.scratch/game-activity/require-verify-check.sh`.
 
 ### 13. Add a lightweight pre-commit guardrail
 - **Status:** [x]

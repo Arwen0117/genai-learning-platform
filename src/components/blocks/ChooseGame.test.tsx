@@ -32,11 +32,8 @@ describe("ChooseGame learner behavior", () => {
         name: /Distractor|Correct/,
       });
     fireEvent.click(options()[0]);
-    expect(onComplete).not.toHaveBeenCalled();
+    expect(onComplete).toHaveBeenCalledOnce();
     fireEvent.click(options()[1]);
-    fireEvent.click(
-      within(view.container).getByRole("button", { name: "Mark as complete" }),
-    );
 
     expect(onFinish).toHaveBeenNthCalledWith(1, expect.objectContaining({
       variant: "choose",
@@ -95,7 +92,7 @@ describe("ChooseGame learner behavior", () => {
     }));
   });
 
-  it("allows completing an attempted Challenge after an incorrect response", () => {
+  it("completes an attempted Challenge after an incorrect response", () => {
     const onComplete = vi.fn();
     const view = render(
       <I18nProvider locale="en" messages={en}>
@@ -115,12 +112,7 @@ describe("ChooseGame learner behavior", () => {
     fireEvent.click(
       within(view.container).getByRole("button", { name: "Distractor" }),
     );
-    const complete = within(view.container).getByRole("button", {
-      name: "Mark as complete",
-    });
-    expect(complete.hasAttribute("disabled")).toBe(false);
-    fireEvent.click(complete);
-
+    expect(view.getByText("Correction: Correct")).toBeTruthy();
     expect(onComplete).toHaveBeenCalledOnce();
   });
 

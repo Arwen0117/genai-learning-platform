@@ -104,6 +104,17 @@ export async function loadLatestGamePlaythrough(
       const access = await activityAccess(lessonId, blockId, undefined, preview);
       if (access.preview)
         return { ok: true as const, attempts: [], playthroughId: null };
+      const publishedVersion =
+        access.activityId === undefined
+          ? null
+          : await prisma.gameActivityVersion.findFirst({
+              where: {
+                lessonId,
+                activityId: access.activityId,
+              },
+              orderBy: [{ version: "desc" }, { id: "desc" }],
+              select: { id: true, contentHash: true },
+            });
       const currentPlaythrough =
         access.activityId === undefined
           ? null
@@ -112,9 +123,18 @@ export async function loadLatestGamePlaythrough(
                 userId: access.userId,
                 lessonId,
                 activityId: access.activityId,
+                ...(publishedVersion?.contentHash
+                  ? { contentHash: publishedVersion.contentHash }
+                  : {}),
               },
               orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-              select: { id: true, status: true, completedAt: true },
+              select: {
+                id: true,
+                status: true,
+                completedAt: true,
+                publishedVersionId: true,
+                contentHash: true,
+              },
             });
       const rows = await prisma.activityAttempt.findMany({
         where: {

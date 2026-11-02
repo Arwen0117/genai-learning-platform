@@ -8,6 +8,7 @@ import type {
   SupportingMedia,
 } from "@/lib/blocks/schema";
 import { useT } from "@/i18n/client";
+import { isLearnerVisibleSupportingMedia } from "@/lib/supporting-media";
 import { loadLatestGamePlaythrough } from "@/server/activities";
 import { ChooseGame } from "./ChooseGame";
 import { MatchGame } from "./MatchGame";
@@ -18,7 +19,7 @@ function SupportingMediaView({
 }: {
   media: SupportingMedia | undefined;
 }) {
-  if (media === undefined) return null;
+  if (!isLearnerVisibleSupportingMedia(media)) return null;
 
   return media.kind === "image" ? (
     /* eslint-disable-next-line @next/next/no-img-element -- media URLs are instructor-approved content */

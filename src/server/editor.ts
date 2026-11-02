@@ -6,11 +6,16 @@ import { getI18n } from "@/i18n/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { loadEditorCourse } from "@/lib/teach";
+import { normalizeLessonGameActivity } from "@/lib/game-activity";
 import {
   editorCourseSchema,
   type EditorCourse,
   type EditorCourseInput,
 } from "@/lib/teach-editor";
+import {
+  contentHashForGameActivity,
+  ensurePublishedGameActivityVersion,
+} from "@/lib/game-activity-version";
 
 /**
  * Persistence for the course editor (P5.1).
@@ -188,14 +193,21 @@ export async function saveCourse(
           }
 
           for (const [lessonIndex, lesson] of courseModule.lessons.entries()) {
+            const normalized = normalizeLessonGameActivity({
+              lessonId: lesson.id,
+              lessonTitle: lesson.title,
+              blocks: lesson.blocks,
+              gameActivity: lesson.gameActivity,
+            });
             const lessonData = {
               title: lesson.title,
               order: lessonIndex,
               estimatedMinutes: lesson.estimatedMinutes,
-              blocks: lesson.blocks as unknown as Prisma.InputJsonValue,
-              gameActivity: lesson.gameActivity as
-                | Prisma.InputJsonValue
-                | undefined,
+              blocks: normalized.blocks as unknown as Prisma.InputJsonValue,
+              gameActivity:
+                normalized.gameActivity === undefined
+                  ? Prisma.DbNull
+                  : (normalized.gameActivity as unknown as Prisma.InputJsonValue),
             };
 
             if (existingLessonIds.has(lesson.id)) {
@@ -210,6 +222,20 @@ export async function saveCourse(
                   moduleId: courseModule.id,
                   ...lessonData,
                 },
+              });
+            }
+
+            if (
+              draft.status === "PUBLISHED" &&
+              normalized.gameActivity !== undefined
+            ) {
+              await ensurePublishedGameActivityVersion({
+                tx,
+                lessonId: lesson.id,
+                activity: normalized.gameActivity,
+                contentHash: contentHashForGameActivity(
+                  normalized.gameActivity,
+                ),
               });
             }
           }

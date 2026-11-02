@@ -40,6 +40,7 @@ export function ChooseGame({
   const [hint, setHint] = useState<string | null>(null);
   const [playthrough, setPlaythrough] = useState(1);
   const playthroughId = useRef(crypto.randomUUID());
+  const progressReported = useRef(completed);
 
   useEffect(() => {
     const attempts = recovery?.attempts ?? [];
@@ -92,6 +93,11 @@ export function ChooseGame({
           }),
       );
     }
+    // First substantive response completes the Challenge for activity progress.
+    if (!progressReported.current) {
+      progressReported.current = true;
+      onComplete();
+    }
   }
 
   function showHint(): void {
@@ -116,6 +122,7 @@ export function ChooseGame({
     setNotice(null);
     setHintsUsed(0);
     setHint(null);
+    progressReported.current = false;
     const nextPlaythroughId = crypto.randomUUID();
     setPlaythrough((run) => run + 1);
     playthroughId.current = nextPlaythroughId;

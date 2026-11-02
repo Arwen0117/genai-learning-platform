@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { Block } from "@/lib/blocks/schema";
 import type { ActivityGrade } from "@/lib/blocks/activity-result";
+import { gameActivityContainerSchema } from "@/lib/game-activity";
+import { contentHashForGameActivity } from "@/lib/game-activity-version";
 
 export function contentVersionForBlock(block: Block): string {
   return createHash("sha256")
@@ -21,9 +23,28 @@ function isSubstantiveAttempt(row: { result: unknown }): boolean {
 }
 
 type PlaythroughClient = {
-  findFirst: (args: unknown) => Promise<{ id: string } | null>;
-  create: (args: unknown) => Promise<{ id: string }>;
+  findFirst: (args: unknown) => Promise<{
+    id: string;
+    publishedVersionId?: string | null;
+  } | null>;
+  create: (args: unknown) => Promise<{
+    id: string;
+    publishedVersionId?: string | null;
+  }>;
   update: (args: unknown) => Promise<unknown>;
+};
+
+type VersionClient = {
+  findFirst: (args: unknown) => Promise<{
+    id: string;
+    contentHash: string;
+    snapshot: unknown;
+  } | null>;
+  findUnique: (args: unknown) => Promise<{
+    id: string;
+    contentHash: string;
+    snapshot: unknown;
+  } | null>;
 };
 
 export async function persistActivity(input: {
@@ -68,18 +89,32 @@ export async function persistActivity(input: {
               : null;
           const playthroughClient = (tx as { playthrough?: PlaythroughClient })
             .playthrough;
+          const versionClient = (
+            tx as { gameActivityVersion?: VersionClient }
+          ).gameActivityVersion;
+          const latestPublishedVersion =
+            activityId === undefined || versionClient === undefined
+              ? null
+              : await versionClient.findFirst({
+                  where: { lessonId, activityId },
+                  orderBy: [{ version: "desc" }, { id: "desc" }],
+                  select: { id: true, contentHash: true, snapshot: true },
+                });
           const isReplay = answer.kind === "replay";
+          const playthroughData = {
+            userId,
+            lessonId,
+            activityId,
+            clientCorrelationId: clientPlaythroughId,
+            publishedVersionId: latestPublishedVersion?.id ?? null,
+            contentHash: latestPublishedVersion?.contentHash ?? null,
+          };
           const playthrough =
             activityId === undefined || playthroughClient === undefined
               ? null
               : isReplay
                 ? await playthroughClient.create({
-                    data: {
-                      userId,
-                      lessonId,
-                      activityId,
-                      clientCorrelationId: clientPlaythroughId,
-                    },
+                    data: playthroughData,
                   })
                 : ((await playthroughClient.findFirst({
                     where: {
@@ -87,18 +122,31 @@ export async function persistActivity(input: {
                       lessonId,
                       activityId,
                       status: "IN_PROGRESS",
+                      ...(latestPublishedVersion?.contentHash
+                        ? { contentHash: latestPublishedVersion.contentHash }
+                        : {}),
                     },
                     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-                    select: { id: true },
+                    select: { id: true, publishedVersionId: true },
                   })) ??
                   (await playthroughClient.create({
-                    data: {
-                      userId,
-                      lessonId,
-                      activityId,
-                      clientCorrelationId: clientPlaythroughId,
-                    },
+                    data: playthroughData,
                   })));
+          const boundVersion =
+            playthrough === null || versionClient === undefined
+              ? latestPublishedVersion
+              : playthrough.publishedVersionId
+                ? ((await versionClient.findUnique({
+                    where: { id: playthrough.publishedVersionId },
+                    select: { id: true, contentHash: true, snapshot: true },
+                  })) ?? latestPublishedVersion)
+                : latestPublishedVersion;
+          const versionSnapshot = gameActivityContainerSchema.safeParse(
+            boundVersion?.snapshot,
+          );
+          const versionChallengeBlocks = versionSnapshot.success
+            ? versionSnapshot.data.challenges
+            : activityBlocks;
           const previousAttempts = await tx.activityAttempt.findMany({
             where: { userId, lessonId, blockId: block.id },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -160,14 +208,17 @@ export async function persistActivity(input: {
           );
           const wasCompleted = completedBlocks.has(block.id);
           if (grade.completed) completedBlocks.add(block.id);
+          const playthroughChallenges = versionChallengeBlocks ?? activityBlocks;
           const playthroughCompletedBlocks = new Set(
-            (activityBlocks === undefined
+            (playthroughChallenges === undefined
               ? previousAttempts
               : await tx.activityAttempt.findMany({
                   where: {
                     userId,
                     lessonId,
-                    blockId: { in: activityBlocks.map((item) => item.id) },
+                    blockId: {
+                      in: playthroughChallenges.map((item) => item.id),
+                    },
                   },
                 })
             )
@@ -180,7 +231,7 @@ export async function persistActivity(input: {
                 return (
                   result.playthroughId === playthrough?.id &&
                   result.completed === true &&
-                  activityBlocks?.some(
+                  playthroughChallenges?.some(
                     (item) =>
                       item.id === row.blockId &&
                       result.contentVersion === contentVersionForBlock(item),
@@ -191,7 +242,7 @@ export async function persistActivity(input: {
           );
           if (grade.completed) playthroughCompletedBlocks.add(block.id);
           const activityDone =
-            activityBlocks?.every((b) =>
+            playthroughChallenges?.every((b) =>
               playthroughCompletedBlocks.has(b.id),
             ) ?? false;
           const allDone = blocks.every((b) => completedBlocks.has(b.id));

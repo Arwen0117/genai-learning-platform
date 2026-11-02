@@ -78,9 +78,6 @@ describe("SortGame learner behavior", () => {
     fireEvent.click(
       within(view.container).getByRole("button", { name: "Check order" }),
     );
-    fireEvent.click(
-      within(view.container).getByRole("button", { name: "Mark as complete" }),
-    );
 
     expect(onComplete).toHaveBeenCalledOnce();
   });
@@ -163,7 +160,7 @@ describe("SortGame learner behavior", () => {
     }));
   });
 
-  it("allows completing an attempted Challenge after an incorrect check", () => {
+  it("completes an attempted Challenge after an incorrect check", () => {
     const onComplete = vi.fn();
     const view = render(
       <I18nProvider locale="en" messages={en}>
@@ -182,12 +179,7 @@ describe("SortGame learner behavior", () => {
     fireEvent.click(
       within(view.container).getByRole("button", { name: "Check order" }),
     );
-    const complete = within(view.container).getByRole("button", {
-      name: "Mark as complete",
-    });
-    expect(complete.hasAttribute("disabled")).toBe(false);
-    fireEvent.click(complete);
-
+    expect(view.getByText("Correction: First, Second")).toBeTruthy();
     expect(onComplete).toHaveBeenCalledOnce();
   });
 

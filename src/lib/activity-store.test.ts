@@ -13,6 +13,8 @@ const m = vi.hoisted(() => ({
   playthroughFind: vi.fn(),
   playthroughCreate: vi.fn(),
   playthroughUpdate: vi.fn(),
+  versionFind: vi.fn(),
+  versionUnique: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: { $transaction: m.transaction } }));
 import { contentVersionForBlock, persistActivity } from "./activity-store";
@@ -65,6 +67,10 @@ beforeEach(() => {
         create: m.playthroughCreate,
         update: m.playthroughUpdate,
       },
+      gameActivityVersion: {
+        findFirst: m.versionFind,
+        findUnique: m.versionUnique,
+      },
     }),
   );
   m.find.mockResolvedValue(null);
@@ -75,7 +81,28 @@ beforeEach(() => {
   ]);
   m.count.mockResolvedValue(0);
   m.playthroughFind.mockResolvedValue(null);
-  m.playthroughCreate.mockResolvedValue({ id: "server-playthrough-1" });
+  m.playthroughCreate.mockResolvedValue({
+    id: "server-playthrough-1",
+    publishedVersionId: "version-1",
+  });
+  m.versionFind.mockResolvedValue({
+    id: "version-1",
+    contentHash: "activity-hash",
+    snapshot: {
+      id: "activity-1",
+      title: "Practice",
+      challenges: [block],
+    },
+  });
+  m.versionUnique.mockResolvedValue({
+    id: "version-1",
+    contentHash: "activity-hash",
+    snapshot: {
+      id: "activity-1",
+      title: "Practice",
+      challenges: [block],
+    },
+  });
 });
 describe("atomic activity persistence", () => {
   it("saves answer, feedback and snapshot; uses game events rather than quiz events", async () => {
@@ -93,7 +120,13 @@ describe("atomic activity persistence", () => {
     expect(m.event.mock.calls[0][0].data.payload).toMatchObject({
       activityId: "activity-1",
     });
-    expect(m.playthroughCreate).toHaveBeenCalledOnce();
+    expect(m.playthroughCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        activityId: "activity-1",
+        publishedVersionId: "version-1",
+        contentHash: "activity-hash",
+      }),
+    });
     expect(m.create.mock.calls[0][0].data.playthroughId).toBe(
       "server-playthrough-1",
     );

@@ -88,6 +88,7 @@ export function SortGame({
   const [hint, setHint] = useState<string | null>(null);
   const [playthrough, setPlaythrough] = useState(1);
   const playthroughId = useRef(crypto.randomUUID());
+  const progressReported = useRef(completed);
 
   useEffect(() => {
     const attempts = recovery?.attempts ?? [];
@@ -183,6 +184,10 @@ export function SortGame({
       setFeedback(
         generatedFeedback?.correct ?? t("block.sort.solved", { attempts: taken }),
       );
+      if (!progressReported.current) {
+        progressReported.current = true;
+        onComplete();
+      }
       return;
     }
 
@@ -195,6 +200,12 @@ export function SortGame({
             .join(", "),
         }),
     );
+    // An incorrect response still completes the Challenge so activity
+    // progression can continue after Correction is revealed.
+    if (!progressReported.current) {
+      progressReported.current = true;
+      onComplete();
+    }
   }
 
   function showHint(): void {
@@ -220,6 +231,7 @@ export function SortGame({
     setSolved(false);
     setHintsUsed(0);
     setHint(null);
+    progressReported.current = false;
     const nextPlaythroughId = crypto.randomUUID();
     setPlaythrough((run) => run + 1);
     playthroughId.current = nextPlaythroughId;

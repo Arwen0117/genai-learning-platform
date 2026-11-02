@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   gameActivityContainerSchema,
   gameActivitySchema,
+  normalizeLessonGameActivity,
   validateGameActivity,
   type GameActivity,
 } from "./game-activity";
@@ -99,7 +100,11 @@ describe("game activity validation", () => {
   });
 
   it("requires Sort, Match, and Choose formats", () => {
-    const activity = Array.from({ length: 5 }, (_, index) => challenge(index));
+    const activity = {
+      id: "activity-1",
+      title: "Practice",
+      challenges: Array.from({ length: 5 }, (_, index) => challenge(index)),
+    };
 
     expect(validateGameActivity(activity, "en").ok).toBe(false);
   });
@@ -114,7 +119,12 @@ describe("game activity validation", () => {
       },
     };
 
-    expect(validateGameActivity(activity, "en").ok).toBe(false);
+    expect(
+      validateGameActivity(
+        { id: "activity-1", title: "Practice", challenges: activity },
+        "en",
+      ).ok,
+    ).toBe(false);
     expect(gameActivitySchema.safeParse([...activity, invalid]).success).toBe(
       false,
     );
@@ -133,16 +143,63 @@ describe("game activity validation", () => {
         })),
       },
     };
-    const mixed = [
-      challenge(0),
-      ...Array.from({ length: 4 }, (_, index) => ({
-        ...challenge(index + 1),
-        title: `第 ${index + 1} 题`,
-      })),
-    ];
+    const mixed = {
+      id: "activity-1",
+      title: "Practice",
+      challenges: [
+        challenge(0),
+        ...Array.from({ length: 4 }, (_, index) => ({
+          ...challenge(index + 1),
+          title: `第 ${index + 1} 题`,
+        })),
+      ],
+    };
 
-    expect(validateGameActivity([ambiguous, ...Array.from({ length: 4 }, (_, i) => challenge(i + 1))], "en").ok).toBe(false);
+    expect(
+      validateGameActivity(
+        {
+          id: "activity-1",
+          title: "Practice",
+          challenges: [
+            ambiguous,
+            ...Array.from({ length: 4 }, (_, i) => challenge(i + 1)),
+          ],
+        },
+        "en",
+      ).ok,
+    ).toBe(false);
     expect(validateGameActivity(mixed, "en").ok).toBe(false);
+  });
+
+  it("migrates five standalone game blocks into one Game Activity container", () => {
+    const source = mockGameActivity("en");
+    const normalized = normalizeLessonGameActivity({
+      lessonId: "lesson-1",
+      lessonTitle: "Lesson practice",
+      blocks: [
+        {
+          id: "reading-1",
+          title: "Read",
+          type: "reading",
+          payload: { markdown: "Hello" },
+        },
+        ...source.challenges,
+      ],
+    });
+
+    expect(normalized.blocks).toEqual([
+      {
+        id: "reading-1",
+        title: "Read",
+        type: "reading",
+        payload: { markdown: "Hello" },
+      },
+    ]);
+    expect(normalized.gameActivity).toEqual({
+      id: "legacy-lesson-1",
+      title: "Lesson practice",
+      challenges: gameActivityContainerSchema.parse(source).challenges,
+    });
   });
 
   it("allows technical terms, identifiers, URLs, and code in localized content", () => {

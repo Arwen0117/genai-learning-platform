@@ -92,6 +92,7 @@ export function MatchGame({
   const [hint, setHint] = useState<string | null>(null);
   const [playthrough, setPlaythrough] = useState(1);
   const playthroughId = useRef(crypto.randomUUID());
+  const progressReported = useRef(completed);
 
   useEffect(() => {
     const attempts = recovery?.attempts ?? [];
@@ -189,6 +190,10 @@ export function MatchGame({
           generatedFeedback?.correct ??
             t("block.match.solved", { count: pairs.length, attempts: taken }),
         );
+        if (!progressReported.current) {
+          progressReported.current = true;
+          onComplete();
+        }
       }
       return;
     }
@@ -202,6 +207,11 @@ export function MatchGame({
         }),
     );
     setPickedLeft(null);
+    // An incorrect pair still marks the Challenge attempted/complete.
+    if (!progressReported.current) {
+      progressReported.current = true;
+      onComplete();
+    }
     resetTimerRef.current = window.setTimeout(() => {
       resetTimerRef.current = null;
       setWrongRight(null);
@@ -236,6 +246,7 @@ export function MatchGame({
     setSolved(false);
     setHintsUsed(0);
     setHint(null);
+    progressReported.current = false;
     const nextPlaythroughId = crypto.randomUUID();
     setPlaythrough((run) => run + 1);
     playthroughId.current = nextPlaythroughId;
