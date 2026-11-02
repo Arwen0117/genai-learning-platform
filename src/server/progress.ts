@@ -66,7 +66,12 @@ export async function trackBlockEvent(
   await trackEvent(parsedInput.data.type, {
     userId,
     courseId: access.courseId,
-    payload: { ...(parsedInput.data.payload ?? {}), lessonId, blockId },
+    payload: {
+      ...(parsedInput.data.payload ?? {}),
+      lessonId,
+      blockId,
+      activityId: access.activityId ?? null,
+    },
   });
 }
 

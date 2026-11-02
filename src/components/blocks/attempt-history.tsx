@@ -61,27 +61,57 @@ export function AttemptHistory({
         const result = row.result as {
           score?: { raw: number; max: number; normalized: number };
           completed?: boolean;
+          activityType?: string;
+          attemptNumber?: number;
           answer?: unknown;
-          feedback?: unknown;
+          feedback?: { correction?: unknown; kind?: unknown };
         };
+        const isGameActivity = result.activityType === "game";
+        const status = result.completed
+          ? t("common.completed")
+          : t("activity.attempt");
+        const answer = result.answer as { kind?: unknown } | undefined;
+        const hasCorrection =
+          result.feedback?.correction !== undefined &&
+          result.feedback.correction !== null;
         return (
           <details key={row.id} className="rounded-lg border p-2 text-xs">
             <summary className="cursor-pointer">
               {new Date(row.createdAt).toLocaleString()} ·{" "}
-              {result.score
+              {isGameActivity ? status : result.score
                 ? `${Math.round(result.score.normalized * 100)}% (${result.score.raw}/${result.score.max})`
                 : t("activity.ungraded")}{" "}
-              ·{" "}
-              {result.completed ? t("common.completed") : t("activity.attempt")}
+              {isGameActivity ? null : `· ${status}`}
             </summary>
-            <p className="mt-2 font-medium">{t("activity.answer")}</p>
-            <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words">
-              {JSON.stringify(result.answer, null, 2)}
-            </pre>
-            <p className="mt-2 font-medium">{t("activity.feedback")}</p>
-            <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words">
-              {JSON.stringify(result.feedback, null, 2)}
-            </pre>
+            {isGameActivity ? (
+              <div className="mt-2 space-y-1 text-muted-foreground">
+                {typeof result.attemptNumber === "number" ? (
+                  <p>
+                    {t("activity.gameResponse", {
+                      current: result.attemptNumber,
+                    })}
+                  </p>
+                ) : null}
+                <p>
+                  {answer?.kind === "hint"
+                    ? t("activity.gameHintUsed")
+                    : hasCorrection
+                      ? t("activity.gameCorrectionRecorded")
+                      : t("activity.gameAnswerRecorded")}
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="mt-2 font-medium">{t("activity.answer")}</p>
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words">
+                  {JSON.stringify(result.answer, null, 2)}
+                </pre>
+                <p className="mt-2 font-medium">{t("activity.feedback")}</p>
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words">
+                  {JSON.stringify(result.feedback, null, 2)}
+                </pre>
+              </>
+            )}
           </details>
         );
       })}

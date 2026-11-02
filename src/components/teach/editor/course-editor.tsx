@@ -26,7 +26,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { Block, BlockType } from "@/lib/blocks/schema";
+import type { Block, BlockType, GameBlock } from "@/lib/blocks/schema";
+import type { GameActivityContainer } from "@/lib/game-activity";
 import {
   AUDIENCE_SUGGESTIONS,
   AUDIENCE_SUGGESTIONS_ZH,
@@ -47,14 +48,16 @@ import { postJson } from "@/lib/post-json";
 import { BlockEditorPanel } from "./block-editor-panel";
 import { BlockListPanel } from "./block-list-panel";
 import { useI18n } from "@/i18n/client";
-import { createBlock } from "./block-templates";
+import { createBlock, createGameActivity } from "./block-templates";
 import { StructurePanel } from "./structure-panel";
+import { GameActivityEditorPanel } from "./game-activity-editor-panel";
+import { swapItems } from "./editor-utils";
 
 /**
  * Three-column course editor (P5.1).
  *
  *   left   — modules and lessons, with ordering and deletion
- *   middle — the blocks of the selected lesson
+ *   middle — the selected lesson's Game Activity and content blocks
  *   right  — the form of the selected block
  *
  * The whole course is one draft in this component's state. Nothing is written
@@ -69,6 +72,7 @@ type IssueMap = {
   modules: Record<string, string[]>;
   lessons: Record<string, string[]>;
   blocks: Record<string, string[]>;
+  challenges: Record<string, string[]>;
 };
 
 type PendingDelete = {
@@ -80,7 +84,7 @@ type PendingDelete = {
 type SaveState = "idle" | "saving" | "saved" | "error";
 
 function emptyIssues(): IssueMap {
-  return { course: [], modules: {}, lessons: {}, blocks: {} };
+  return { course: [], modules: {}, lessons: {}, blocks: {}, challenges: {} };
 }
 
 function countIssues(issues: IssueMap): number {
@@ -91,7 +95,8 @@ function countIssues(issues: IssueMap): number {
     issues.course.length +
     sum(issues.modules) +
     sum(issues.lessons) +
-    sum(issues.blocks)
+    sum(issues.blocks) +
+    sum(issues.challenges)
   );
 }
 
@@ -142,24 +147,6 @@ function findBlockLocation(
   return null;
 }
 
-function swap<T>(items: T[], index: number, delta: number): T[] {
-  const target = index + delta;
-  if (target < 0 || target >= items.length) {
-    return items;
-  }
-
-  const next = [...items];
-  const moved = next[index];
-  const displaced = next[target];
-  if (moved === undefined || displaced === undefined) {
-    return items;
-  }
-
-  next[index] = displaced;
-  next[target] = moved;
-  return next;
-}
-
 function updateLesson(
   course: EditorCourse,
   lessonId: string,
@@ -195,6 +182,31 @@ function replaceBlock(course: EditorCourse, next: Block): EditorCourse {
   };
 }
 
+function replaceGameChallenge(
+  course: EditorCourse,
+  next: Extract<Block, { type: "game" }>,
+): EditorCourse {
+  return {
+    ...course,
+    modules: course.modules.map((courseModule) => ({
+      ...courseModule,
+      lessons: courseModule.lessons.map((lesson) =>
+        lesson.gameActivity?.challenges.some((challenge) => challenge.id === next.id)
+          ? {
+              ...lesson,
+              gameActivity: {
+                ...lesson.gameActivity,
+                challenges: lesson.gameActivity.challenges.map((challenge) =>
+                  challenge.id === next.id ? next : challenge,
+                ),
+              },
+            }
+          : lesson,
+      ),
+    })),
+  };
+}
+
 function removeBlock(course: EditorCourse, blockId: string): EditorCourse {
   return {
     ...course,
@@ -206,7 +218,17 @@ function removeBlock(course: EditorCourse, blockId: string): EditorCourse {
               ...lesson,
               blocks: lesson.blocks.filter((block) => block.id !== blockId),
             }
-          : lesson,
+          : lesson.gameActivity?.challenges.some((challenge) => challenge.id === blockId)
+            ? {
+                ...lesson,
+                gameActivity: {
+                  ...lesson.gameActivity,
+                  challenges: lesson.gameActivity.challenges.filter(
+                    (challenge) => challenge.id !== blockId,
+                  ),
+                },
+              }
+            : lesson,
       ),
     })),
   };
@@ -255,6 +277,17 @@ function mapIssues(error: ZodError, course: EditorCourse): IssueMap {
       continue;
     }
 
+    if (path[4] === "gameActivity" && path[5] === "challenges" && typeof path[6] === "number") {
+      const challenge = lesson.gameActivity?.challenges[path[6]];
+      if (challenge !== undefined) {
+        issues.challenges[challenge.id] = [
+          ...(issues.challenges[challenge.id] ?? []),
+          format(path.slice(7)),
+        ];
+        continue;
+      }
+    }
+
     if (path[4] !== "blocks" || typeof path[5] !== "number") {
       issues.lessons[lesson.id] = [
         ...(issues.lessons[lesson.id] ?? []),
@@ -288,6 +321,7 @@ function toCourseInput(course: EditorCourse): EditorCourseInput {
     // the enum is rejected by the schema with a readable message.
     difficulty: course.difficulty as EditorDifficulty,
     coverEmoji: course.coverEmoji,
+    language: course.language,
     status: course.status,
     modules: course.modules.map((courseModule) => ({
       id: courseModule.id,
@@ -297,6 +331,7 @@ function toCourseInput(course: EditorCourse): EditorCourseInput {
         title: lesson.title,
         estimatedMinutes: lesson.estimatedMinutes,
         blocks: lesson.blocks,
+        gameActivity: lesson.gameActivity,
       })),
     })),
   };
@@ -353,6 +388,9 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
   const selectedLesson = findLesson(draft, selectedLessonId);
   const selectedBlock =
     selectedLesson?.blocks.find((block) => block.id === selectedBlockId) ??
+    selectedLesson?.gameActivity?.challenges.find(
+      (challenge) => challenge.id === selectedBlockId,
+    ) ??
     null;
   const lessonCount = draft.modules.reduce(
     (total, courseModule) => total + courseModule.lessons.length,
@@ -363,6 +401,11 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
       total +
       courseModule.lessons.reduce(
         (lessonTotal, lesson) => lessonTotal + lesson.blocks.length,
+        0,
+      ) +
+      courseModule.lessons.reduce(
+        (lessonTotal, lesson) =>
+          lessonTotal + (lesson.gameActivity?.challenges.length ?? 0),
         0,
       ),
     0,
@@ -482,7 +525,7 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
   function moveModule(index: number, delta: number): void {
     commit((previous) => ({
       ...previous,
-      modules: swap(previous.modules, index, delta),
+      modules: swapItems(previous.modules, index, delta),
     }));
   }
 
@@ -521,7 +564,7 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
         courseModule.id === moduleId
           ? {
               ...courseModule,
-              lessons: swap(courseModule.lessons, index, delta),
+              lessons: swapItems(courseModule.lessons, index, delta),
             }
           : courseModule,
       ),
@@ -568,6 +611,45 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
       return;
     }
 
+    // Game Challenges belong in the lesson's Game Activity, not the block list.
+    if (type === "game") {
+      let selectedId: string | null = null;
+      commit((previous) =>
+        updateLesson(previous, selectedLessonId, (lesson) => {
+          const challenge = createBlock("game", locale) as GameBlock;
+          selectedId = challenge.id;
+
+          if (lesson.gameActivity !== undefined) {
+            return {
+              ...lesson,
+              gameActivity: {
+                ...lesson.gameActivity,
+                challenges: [...lesson.gameActivity.challenges, challenge],
+              },
+            };
+          }
+
+          const legacyGames = lesson.blocks.filter(
+            (block): block is GameBlock => block.type === "game",
+          );
+          const activity = createGameActivity(locale, {
+            title: lesson.title,
+            seedChallenges: [...legacyGames, challenge],
+          });
+
+          return {
+            ...lesson,
+            blocks: lesson.blocks.filter((block) => block.type !== "game"),
+            gameActivity: activity,
+          };
+        }),
+      );
+      if (selectedId !== null) {
+        setSelectedBlockId(selectedId);
+      }
+      return;
+    }
+
     const block = createBlock(type, locale);
 
     commit((previous) =>
@@ -577,6 +659,16 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
       })),
     );
     setSelectedBlockId(block.id);
+  }
+
+  function updateGameActivity(activity: GameActivityContainer): void {
+    if (selectedLessonId === null) return;
+    commit((previous) =>
+      updateLesson(previous, selectedLessonId, (lesson) => ({
+        ...lesson,
+        gameActivity: activity,
+      })),
+    );
   }
 
   function duplicateBlock(blockId: string): void {
@@ -616,6 +708,25 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
   function deleteBlock(blockId: string): void {
     const location = findBlockLocation(draft, blockId);
     if (location === null) {
+      const lesson = selectedLesson?.gameActivity?.challenges.find(
+        (challenge) => challenge.id === blockId,
+      );
+      if (lesson === undefined || selectedLesson?.gameActivity === undefined) {
+        return;
+      }
+
+      const challengeIndex = selectedLesson.gameActivity.challenges.findIndex(
+        (challenge) => challenge.id === blockId,
+      );
+      const remaining = selectedLesson.gameActivity.challenges.filter(
+        (challenge) => challenge.id !== blockId,
+      );
+      commit((previous) => removeBlock(previous, blockId));
+      setProblem(blockId, null);
+      if (selectedBlockId === blockId) {
+        const next = remaining[Math.min(challengeIndex, remaining.length - 1)];
+        setSelectedBlockId(next?.id ?? null);
+      }
       return;
     }
 
@@ -636,7 +747,7 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
     commit((previous) =>
       updateLesson(previous, lessonId, (lesson) => ({
         ...lesson,
-        blocks: swap(lesson.blocks, index, delta),
+        blocks: swapItems(lesson.blocks, index, delta),
       })),
     );
   }
@@ -1077,49 +1188,59 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
           selectedLessonId={selectedLessonId}
         />
 
-        <BlockListPanel
-          blockIssues={issues.blocks}
-          lesson={selectedLesson}
-          lessonIssues={lessonIssues}
-          onAddBlock={addBlock}
-          onChangeMinutes={(minutes) => {
-            if (selectedLessonId === null) {
-              return;
-            }
+        <div className="space-y-4">
+          <GameActivityEditorPanel
+            activity={selectedLesson?.gameActivity}
+            errors={lessonIssues}
+            onChange={updateGameActivity}
+            onSelectChallenge={selectBlock}
+            challengeIssues={issues.challenges}
+            selectedChallengeId={selectedBlockId}
+          />
+          <BlockListPanel
+            blockIssues={issues.blocks}
+            lesson={selectedLesson}
+            lessonIssues={lessonIssues}
+            onAddBlock={addBlock}
+            onChangeMinutes={(minutes) => {
+              if (selectedLessonId === null) {
+                return;
+              }
 
-            commit((previous) =>
-              updateLesson(previous, selectedLessonId, (lesson) => ({
-                ...lesson,
-                estimatedMinutes: minutes,
-              })),
-            );
-          }}
-          onDeleteBlock={deleteBlock}
-          onDuplicateBlock={duplicateBlock}
-          onMoveBlock={(index, delta) => {
-            if (selectedLessonId === null) {
-              return;
-            }
+              commit((previous) =>
+                updateLesson(previous, selectedLessonId, (lesson) => ({
+                  ...lesson,
+                  estimatedMinutes: minutes,
+                })),
+              );
+            }}
+            onDeleteBlock={deleteBlock}
+            onDuplicateBlock={duplicateBlock}
+            onMoveBlock={(index, delta) => {
+              if (selectedLessonId === null) {
+                return;
+              }
 
-            moveBlock(selectedLessonId, index, delta);
-          }}
-          onRenameLesson={(title) => {
-            if (selectedLessonId === null) {
-              return;
-            }
+              moveBlock(selectedLessonId, index, delta);
+            }}
+            onRenameLesson={(title) => {
+              if (selectedLessonId === null) {
+                return;
+              }
 
-            commit((previous) =>
-              updateLesson(previous, selectedLessonId, (lesson) => ({
-                ...lesson,
-                title,
-              })),
-            );
-          }}
-          onSelectBlock={(blockId) => {
-            selectBlock(blockId);
-          }}
-          selectedBlockId={selectedBlockId}
-        />
+              commit((previous) =>
+                updateLesson(previous, selectedLessonId, (lesson) => ({
+                  ...lesson,
+                  title,
+                })),
+              );
+            }}
+            onSelectBlock={(blockId) => {
+              selectBlock(blockId);
+            }}
+            selectedBlockId={selectedBlockId}
+          />
+        </div>
 
         <BlockEditorPanel
           block={selectedBlock}
@@ -1129,7 +1250,14 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
               : (issues.blocks[selectedBlock.id] ?? [])
           }
           onChange={(next) => {
-            commit((previous) => replaceBlock(previous, next));
+            commit((previous) =>
+              next.type === "game" &&
+              selectedLesson?.gameActivity?.challenges.some(
+                (challenge) => challenge.id === next.id,
+              )
+                ? replaceGameChallenge(previous, next)
+                : replaceBlock(previous, next),
+            );
           }}
           onDelete={() => {
             if (selectedBlock !== null) {

@@ -12,6 +12,7 @@ import { auth } from "@/lib/auth";
 import { DOCUMENT_ERROR_KEYS, readCourseDocument } from "@/lib/course-document";
 import { withInstructions } from "@/lib/course-source";
 import { describeImages } from "@/lib/describe-images";
+import { validateGameActivity } from "@/lib/game-activity";
 import {
   contentLanguageFromLocale,
   type ContentLanguage,
@@ -334,6 +335,15 @@ export async function generateLearnerCourse(
         temperature: 0.6,
       },
     );
+    for (const [index, lesson] of generated.lessons.entries()) {
+      const validation = validateGameActivity(lesson.gameActivity, language);
+      if (!validation.ok) {
+        return {
+          ok: false,
+          error: `Generated lesson ${index + 1} needs review: ${validation.errors.join(" ")}`,
+        };
+      }
+    }
 
     const course = await prisma.course.create({
       data: {
@@ -362,6 +372,9 @@ export async function generateLearnerCourse(
                   order: index,
                   estimatedMinutes: lesson.estimatedMinutes,
                   blocks: lesson.blocks as unknown as Prisma.InputJsonValue,
+                  gameActivity: lesson.gameActivity as
+                    | Prisma.InputJsonValue
+                    | undefined,
                 })),
               },
             },

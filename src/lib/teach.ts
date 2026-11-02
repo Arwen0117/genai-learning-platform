@@ -1,6 +1,7 @@
 import type { CourseSource, CourseStatus, Prisma } from "@prisma/client";
 
 import { blockListSchema, blockSchema, type Block } from "@/lib/blocks/schema";
+import { gameActivityContainerSchema } from "@/lib/game-activity";
 import { prisma } from "@/lib/prisma";
 import type {
   EditorCourse,
@@ -99,6 +100,7 @@ const editorCourseSelect = {
   audience: true,
   difficulty: true,
   coverEmoji: true,
+  language: true,
   status: true,
   source: true,
   createdById: true,
@@ -114,6 +116,7 @@ const editorCourseSelect = {
           title: true,
           estimatedMinutes: true,
           blocks: true,
+          gameActivity: true,
         },
       },
     },
@@ -166,6 +169,7 @@ export async function loadEditorCourse(
     audience: row.audience,
     difficulty: row.difficulty,
     coverEmoji: row.coverEmoji,
+    language: row.language === "zh" ? "zh" : "en",
     status: row.status,
     source: row.source,
     createdById: row.createdById,
@@ -181,9 +185,10 @@ export async function loadEditorCourse(
           estimatedMinutes: lesson.estimatedMinutes,
           blocks: parsed.blocks,
           droppedBlocks: parsed.dropped,
+          gameActivity: gameActivityContainerSchema.safeParse(lesson.gameActivity)
+            .data,
         };
       }),
     })),
   };
 }
-

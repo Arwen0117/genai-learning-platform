@@ -85,7 +85,11 @@ describe("activity grades", () => {
   });
   it("grades non-contiguous sort orders and rejects duplicate ids", () => {
     expect(gradeActivity(game, { order: [1, 0] }).score?.normalized).toBe(1);
-    expect(gradeActivity(game, { order: [0, 1] }).completed).toBe(false);
+    expect(gradeActivity(game, { order: [0, 1] })).toMatchObject({
+      completed: true,
+      passed: false,
+      feedback: { correction: { expected: [1, 0] } },
+    });
     expect(() => gradeActivity(game, { order: [0, 0] })).toThrow();
   });
   it("does not count repeated matching pairs as distinct answers", () => {
@@ -107,8 +111,35 @@ describe("activity grades", () => {
           { left: 0, right: 0 },
           { left: 0, right: 0 },
         ],
-      }).completed,
-    ).toBe(false);
+      }),
+    ).toMatchObject({ completed: true, passed: false });
+  });
+  it("grades a choose challenge from the saved correct option", () => {
+    const block: Block = {
+      id: "c",
+      title: "Choose",
+      type: "game",
+      payload: {
+        variant: "choose",
+        prompt: "Which is safest?",
+        options: [
+          { text: "Distractor", correct: false },
+          { text: "Correct", correct: true },
+        ],
+      },
+    };
+    expect(gradeActivity(block, { option: 0 })).toMatchObject({
+      completed: true,
+      passed: false,
+      feedback: { correction: { answer: "Correct" } },
+    });
+    expect(gradeActivity(block, { option: 1 })).toMatchObject({
+      completed: true,
+      passed: true,
+      score: null,
+      verification: "server",
+    });
+    expect(() => gradeActivity(block, { option: 3 })).toThrow();
   });
   it("labels browser coding tests as unverified and rejects stale test sets", () => {
     const block: Block = {

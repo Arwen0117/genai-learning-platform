@@ -2,7 +2,10 @@
 
 import { z } from "zod";
 import { activityAccess } from "@/lib/activity-access";
-import { persistActivity } from "@/lib/activity-store";
+import {
+  contentVersionForBlock,
+  persistActivity,
+} from "@/lib/activity-store";
 import {
   activitySubmissionSchema,
   gradeActivity,
@@ -23,7 +26,16 @@ export async function submitActivity(
     // A teacher preview is read-only: never create ActivityAttempt or
     // LessonProgress rows while the teacher is looking at the course.
     if (access.preview) return { ok: true as const, id: null };
-    const grade = gradeActivity(access.block, parsed.answer);
+    const grade =
+      parsed.feedback.kind === "hint" || parsed.answer.kind === "replay"
+        ? {
+            score: null,
+            completed: false,
+            passed: null,
+            verification: "ungraded" as const,
+            feedback: parsed.feedback,
+          }
+        : gradeActivity(access.block, parsed.answer);
     const attempt = await persistActivity({
       ...access,
       courseId: access.courseId!,
@@ -76,4 +88,110 @@ export async function loadActivityAttempts(
       error: cause instanceof Error ? cause.message : "Cannot load history.",
     };
   }
+}
+
+/**
+ * Returns the latest unfinished or completed game run for this learner.
+ * Attempts are filtered by the saved content fingerprint so a republished
+ * challenge can never hydrate controls with answers from an older version.
+ */
+export async function loadLatestGamePlaythrough(
+    lessonId: string,
+    blockId: string,
+    preview = false,
+  ) {
+    try {
+      const access = await activityAccess(lessonId, blockId, undefined, preview);
+      if (access.preview)
+        return { ok: true as const, attempts: [], playthroughId: null };
+      const publishedVersion =
+        access.activityId === undefined
+          ? null
+          : await prisma.gameActivityVersion.findFirst({
+              where: {
+                lessonId,
+                activityId: access.activityId,
+              },
+              orderBy: [{ version: "desc" }, { id: "desc" }],
+              select: { id: true, contentHash: true },
+            });
+      const currentPlaythrough =
+        access.activityId === undefined
+          ? null
+          : await prisma.playthrough.findFirst({
+              where: {
+                userId: access.userId,
+                lessonId,
+                activityId: access.activityId,
+                ...(publishedVersion?.contentHash
+                  ? { contentHash: publishedVersion.contentHash }
+                  : {}),
+              },
+              orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+              select: {
+                id: true,
+                status: true,
+                completedAt: true,
+                publishedVersionId: true,
+                contentHash: true,
+              },
+            });
+      const rows = await prisma.activityAttempt.findMany({
+        where: {
+          userId: access.userId,
+          lessonId,
+          blockId,
+          ...(currentPlaythrough === null
+            ? {}
+            : { playthroughId: currentPlaythrough.id }),
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      });
+      const version = contentVersionForBlock(access.block);
+      const latest = rows.find((row) => {
+        const result = row.result as {
+          contentVersion?: unknown;
+          playthroughId?: unknown;
+        };
+        return (
+          result.contentVersion === version &&
+          typeof result.playthroughId === "string"
+        );
+      });
+      if (!latest) {
+        return { ok: true as const, attempts: [], playthroughId: null };
+      }
+      const playthroughId =
+        currentPlaythrough?.id ??
+        (latest.result as { playthroughId: string }).playthroughId;
+      return {
+        ok: true as const,
+        playthroughId,
+        playthroughStatus: currentPlaythrough?.status ?? null,
+        completedAt: currentPlaythrough?.completedAt?.toISOString() ?? null,
+        attempts: rows
+          .filter((row) => {
+            const result = row.result as {
+              contentVersion?: unknown;
+              playthroughId?: unknown;
+            };
+            return (
+              result.contentVersion === version &&
+              result.playthroughId === playthroughId
+            );
+          })
+          .reverse()
+          .map((row) => ({
+            answer: ((row.result as { answer?: unknown }).answer ??
+              {}) as Record<string, unknown>,
+            completed: (row.result as { completed?: unknown }).completed === true,
+          })),
+      };
+    } catch (cause) {
+      return {
+        ok: false as const,
+        error:
+          cause instanceof Error ? cause.message : "Cannot recover game state.",
+      };
+    }
 }
