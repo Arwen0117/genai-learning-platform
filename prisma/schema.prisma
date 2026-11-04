@@ -48,6 +48,7 @@ model User {
   lessonProgress LessonProgress[]
   events         EngagementEvent[]
   createdCourses Course[]         @relation("CourseCreator")
+  createdInvitations Invitation[] @relation("InvitationCreator")
   tutorSessions  TutorSession[]
   blockOverrides UserBlockOverride[]
   activityAttempts ActivityAttempt[]
@@ -72,6 +73,7 @@ model Course {
   createdBy   User         @relation("CourseCreator", fields: [createdById], references: [id])
   modules     Module[]
   enrollments Enrollment[]
+  invitations Invitation[]
   events      EngagementEvent[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -139,6 +141,21 @@ model Enrollment {
   createdAt   DateTime  @default(now())
   completedAt DateTime?
   @@unique([userId, courseId])
+}
+
+/// Open multi-use Course Invitation (ADR 0001). Safety is optional expiry + revoke.
+model Invitation {
+  id          String    @id @default(cuid())
+  token       String    @unique
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User      @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+
+  @@index([courseId])
 }
 
 model LessonProgress {
