@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
+import { InvitationPanel } from "@/components/teach/students/invitation-panel";
 import { StudentImportPanel } from "@/components/teach/students/student-import-panel";
 import { StudentRoster } from "@/components/teach/students/student-roster";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ import { auth } from "@/lib/auth";
 import { listCourseStudents, loadRosterCourse } from "@/lib/students";
 import { EDITOR_STATUS_KEYS } from "@/lib/teach-editor";
 import { cn } from "@/lib/utils";
+import { listInvitations } from "@/server/invitation";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getI18n();
@@ -56,8 +58,20 @@ async function StudentsContent({ params }: StudentsPageProps) {
     notFound();
   }
 
-  const students = await listCourseStudents(course.id);
+  const [students, listed] = await Promise.all([
+    listCourseStudents(course.id),
+    listInvitations({ courseId: course.id, actorId: user.id, t }),
+  ]);
   const isPublished = course.status === "PUBLISHED";
+  const invitations = listed.ok
+    ? listed.invitations.map((row) => ({
+        id: row.id,
+        redeemPath: row.redeemPath,
+        createdAt: row.createdAt.toISOString(),
+        expiresAt: row.expiresAt?.toISOString() ?? null,
+        status: row.status,
+      }))
+    : [];
 
   return (
     <div className="space-y-8">
@@ -99,6 +113,12 @@ async function StudentsContent({ params }: StudentsPageProps) {
           {t("teach.edit")}
         </Link>
       </header>
+
+      <InvitationPanel
+        courseId={course.id}
+        coursePublished={isPublished}
+        initialInvitations={invitations}
+      />
 
       <StudentImportPanel courseId={course.id} slug={course.slug} />
 

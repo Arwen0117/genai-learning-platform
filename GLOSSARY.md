@@ -1,6 +1,48 @@
-# Learning Activities
+# GenAI Learning Platform
 
-This context defines the learner-facing activities used to practice course concepts and the language used to author and evaluate them.
+This context defines the people who use the platform, how they belong to Courses, and the learner-facing activities used to practice course concepts.
+
+## People and membership
+
+**User**:
+A person who authenticates to the platform; the single identity for every role.
+_Avoid_: Account, student (as an entity)
+
+**Learner**:
+The capability of a User who studies Courses; not a separate identity table.
+_Avoid_: Student (as a type)
+
+**Course**:
+The unit of published learning content a Learner can enroll in; the only enrollment unit in v1.
+_Avoid_: Class, cohort, section
+
+**Enrollment**:
+The membership of a User in one Course.
+_Avoid_: Registration, roster row (as the domain concept)
+
+**Instructor**:
+The capability of a User who authors and manages Courses and views enrolled Learners' progress.
+_Avoid_: Teacher, course admin (as a separate identity)
+
+**Admin**:
+The capability of a User who operates the whole platform (users, courses, platform-wide metrics).
+_Avoid_: Superuser (as a product term)
+
+**Invitation**:
+A Course-scoped, shareable multi-use token link an Instructor issues so a person can join a PUBLISHED Course (creating a Learner User when needed, then an Enrollment). It may expire or be revoked; redemption count is not capped in v1. Named one-time email invites are out of scope.
+_Avoid_: Invite code, magic link (unless it is this Course join path), email-bound invite
+
+**Insights**:
+The Instructor-facing Course performance dashboard, read from Enrollments and existing learning activity records (Playthrough, Lesson Progress, and related events).
+_Avoid_: Analytics warehouse, separate performance app
+
+**Report**:
+A downloadable CSV snapshot of roster or Insights metrics; not a stored document.
+_Avoid_: Report entity, scheduled PDF
+
+**Lesson Progress**:
+A Learner's completion state for one Lesson within a Course.
+_Avoid_: Learning record (as a stored aggregate), gradebook row
 
 ## Game activities
 

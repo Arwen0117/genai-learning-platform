@@ -51,3 +51,4 @@ next-env.d.ts
 /TASKS.md
 .agents
 skills-lock.json
+.cursor
