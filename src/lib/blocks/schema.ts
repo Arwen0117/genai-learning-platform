@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { courseProgrammingPayloadSchema } from "@/lib/programming-game/course-config";
 
+import { MOTION_PATTERN_IDS } from "@/lib/simulation-motion";
+import {
+  CHALLENGE_MAX_ANIMATION_SECONDS,
+  SIMULATION_MAX_ANIMATION_SECONDS,
+} from "@/lib/supporting-media-duration";
+
 /**
  * Single source of truth for lesson blocks (docs/plan/01 §3).
  *
@@ -185,23 +191,150 @@ export const matchPairSchema = z.object({
   right: z.string().min(1),
 });
 
+/** One option in a `choose` game. Exactly one option must be correct. */
+export const chooseOptionSchema = z.object({
+  text: z.string().min(1),
+  correct: z.boolean(),
+});
+
+/** Instructional guidance attached to a generated Game Challenge. */
+export const gameFeedbackSchema = z.object({
+  correct: z.string().min(1),
+  incorrect: z.string().min(1),
+});
+
+const supportingMediaBaseSchema = z.object({
+  url: z
+    .string()
+    .min(1)
+    .refine((value) => value.startsWith("/") || /^https?:\/\//u.test(value), {
+      message: "Supporting media URL must be an absolute URL or public path.",
+    }),
+  approvalStatus: z.enum(["approved", "pending", "rejected"]),
+  moderationStatus: z.enum(["passed", "pending", "failed"]),
+  provenance: z.object({
+    source: z.enum(["model-generated", "instructor-provided"]),
+    model: z.string().min(1).optional(),
+    generatedAt: z.string().datetime().optional(),
+  }),
+  altText: z.string().min(1).optional(),
+  decorative: z.boolean(),
+});
+
+/**
+ * Supporting media schema parameterized by animation duration max.
+ * Challenge callers keep 5s; Simulation uses 10s via the shared factory.
+ */
+export function supportingMediaSchemaFor(maxDurationSeconds: number) {
+  return z.discriminatedUnion("kind", [
+    supportingMediaBaseSchema.extend({
+      kind: z.literal("image"),
+    }),
+    supportingMediaBaseSchema.extend({
+      kind: z.literal("animation"),
+      durationSeconds: z.number().positive().max(maxDurationSeconds),
+    }),
+  ]);
+}
+
+/** Challenge / Game Activity Supporting media (animation ≤ 5s). */
+export const supportingMediaSchema = supportingMediaSchemaFor(
+  CHALLENGE_MAX_ANIMATION_SECONDS,
+);
+
+/** Simulation node Supporting media (animation ≤ 10s). */
+export const simulationSupportingMediaSchema = supportingMediaSchemaFor(
+  SIMULATION_MAX_ANIMATION_SECONDS,
+);
+
+const motionPatternSchema = z.enum(MOTION_PATTERN_IDS);
+
+const simulationMotionDefaultsSchema = z
+  .object({
+    nodeEnter: motionPatternSchema.optional(),
+    choiceSelected: motionPatternSchema.optional(),
+    feedbackReveal: motionPatternSchema.optional(),
+    summaryEnter: motionPatternSchema.optional(),
+  })
+  .strict();
+
+function addSupportingMediaIssues(
+  media: z.infer<typeof supportingMediaSchema>,
+  ctx: z.RefinementCtx,
+  path: (string | number)[],
+): void {
+  if (media.approvalStatus !== "approved") {
+    ctx.addIssue({
+      code: "custom",
+      path: [...path, "approvalStatus"],
+      message: "Supporting media requires instructor approval.",
+    });
+  }
+  if (media.moderationStatus !== "passed") {
+    ctx.addIssue({
+      code: "custom",
+      path: [...path, "moderationStatus"],
+      message: "Supporting media must pass safety moderation.",
+    });
+  }
+  if (!media.decorative && media.altText === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: [...path, "altText"],
+      message:
+        "Supporting media needs editable alt text or a decorative designation.",
+    });
+  }
+  if (
+    media.provenance.source === "model-generated" &&
+    (media.provenance.model === undefined ||
+      media.provenance.generatedAt === undefined)
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: [...path, "provenance"],
+      message:
+        "Model-generated media needs model and generation timestamp provenance.",
+    });
+  }
+}
+
+const gameChallengeMetadataSchema = z.object({
+  feedback: gameFeedbackSchema.optional(),
+  hint: z.string().min(1).optional(),
+  supportingMedia: supportingMediaSchema.optional(),
+});
+
 const sortGamePayloadSchema = z.object({
   variant: z.literal("sort"),
   items: z.array(sortItemSchema).min(2),
-});
+}).merge(gameChallengeMetadataSchema);
 
 const matchGamePayloadSchema = z.object({
   variant: z.literal("match"),
   pairs: z.array(matchPairSchema).min(2),
-});
+}).merge(gameChallengeMetadataSchema);
 
-/** `game` — ordering, matching or a teacher-authored programming challenge. */
+const chooseGamePayloadSchema = z
+  .object({
+    variant: z.literal("choose"),
+    prompt: z.string().min(1),
+    options: z.array(chooseOptionSchema).min(2),
+  })
+  .merge(gameChallengeMetadataSchema)
+  .refine((payload) => payload.options.filter((option) => option.correct).length === 1, {
+    message: "Choose Challenges must have exactly one correct option.",
+    path: ["options"],
+  });
+
+/** `game` — Challenge payload for Sort, Match, or Choose inside a Game Activity. */
 export const gameBlockSchema = blockBaseSchema
   .extend({
     type: z.literal("game"),
     payload: z.union([
       sortGamePayloadSchema,
       matchGamePayloadSchema,
+      chooseGamePayloadSchema,
       courseProgrammingPayloadSchema,
     ]),
   })
@@ -211,7 +344,20 @@ export const gameBlockSchema = blockBaseSchema
       new Set(block.payload.items.map((item) => item.order)).size ===
         block.payload.items.length,
     { message: "Sort items must all carry a distinct order value." },
-  );
+  )
+  .superRefine((block, ctx) => {
+    if (block.payload.variant === "programming") return;
+    const media = block.payload.supportingMedia;
+    if (media === undefined) return;
+    addSupportingMediaIssues(media, ctx, ["payload", "supportingMedia"]);
+  });
+
+/** Game Activity containers support these three formats; programming courses
+ * keep their own progression, grading and configuration boundary. */
+export const gameChallengeBlockSchema = gameBlockSchema.safeExtend({
+  payload: z.discriminatedUnion("variant", [sortGamePayloadSchema, matchGamePayloadSchema, chooseGamePayloadSchema]),
+});
+export type GameChallengeBlock = z.infer<typeof gameChallengeBlockSchema>;
 
 /** One choice offered by a simulation node. */
 export const simulationOptionSchema = z.object({
@@ -224,14 +370,17 @@ export const simulationOptionSchema = z.object({
 });
 
 /**
- * One step of a simulation: what happens next, and the ways out of it.
+ * One node of a simulation: what happens next, and the ways out of it.
  *
  * `options` is only required on nodes the learner has to leave: the `end` node
- * is a closing statement with nothing left to choose.
+ * is a closing statement with nothing left to choose. Optional motion overrides
+ * and Supporting media enrich presentation without changing scoring.
  */
 export const simulationNodeSchema = z.object({
   text: z.string().min(1),
   options: z.array(simulationOptionSchema),
+  motion: simulationMotionDefaultsSchema.optional(),
+  supportingMedia: simulationSupportingMediaSchema.optional(),
 });
 
 /** `simulation` — a branching scenario walked one decision at a time. */
@@ -242,6 +391,8 @@ export const simulationBlockSchema = blockBaseSchema
       intro: z.string().min(1),
       start: z.string().min(1),
       end: z.string().min(1),
+      /** Optional block-level motion defaults for the four beats. */
+      motion: simulationMotionDefaultsSchema.optional(),
       nodes: z.record(z.string(), simulationNodeSchema),
     }),
   })
@@ -272,6 +423,14 @@ export const simulationBlockSchema = blockBaseSchema
             message: `Unknown target: ${option.next}`,
           });
       });
+      if (node.supportingMedia !== undefined) {
+        addSupportingMediaIssues(node.supportingMedia, ctx, [
+          "payload",
+          "nodes",
+          id,
+          "supportingMedia",
+        ]);
+      }
     }
     if (nodes[end]?.options.length)
       ctx.addIssue({
@@ -355,6 +514,8 @@ export type CodingTest = z.infer<typeof codingTestSchema>;
 export type CodingBlock = z.infer<typeof codingBlockSchema>;
 export type SortItem = z.infer<typeof sortItemSchema>;
 export type MatchPair = z.infer<typeof matchPairSchema>;
+export type ChooseOption = z.infer<typeof chooseOptionSchema>;
+export type SupportingMedia = z.infer<typeof supportingMediaSchema>;
 export type GameBlock = z.infer<typeof gameBlockSchema>;
 export type SimulationOption = z.infer<typeof simulationOptionSchema>;
 export type SimulationNode = z.infer<typeof simulationNodeSchema>;

@@ -18,7 +18,10 @@ export const LLM_USAGES = [
   "code-review",
   "course-outline",
   "course-lesson",
+  "course-game-activity",
+  "course-simulation-block",
   "learner-course",
+
   "repo-analysis",
   "explain-code",
   "explain-folder",

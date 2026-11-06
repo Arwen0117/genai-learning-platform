@@ -1,5 +1,14 @@
+import { gameChallengeBlockSchema } from "@/lib/blocks/schema";
 import type { Locale } from "@/i18n/config";
-import type { Block, BlockType } from "@/lib/blocks/schema";
+import type { GameActivityContainer } from "@/lib/game-activity";
+import type {
+  Block,
+  BlockType,
+  GameChallengeBlock as GameBlock,
+  GameBlock as LegacyGameBlock,
+  SimulationBlock,
+  SortItem,
+} from "@/lib/blocks/schema";
 
 /**
  * Starting points for the block picker in the course editor (P5.1).
@@ -74,6 +83,20 @@ function newId(): string {
 
 type Template = () => Block;
 
+export function reorderSortItems(
+  items: readonly SortItem[],
+  index: number,
+  delta: -1 | 1,
+): SortItem[] {
+  const target = index + delta;
+  if (index < 0 || target < 0 || target >= items.length) {
+    return [...items];
+  }
+  const next = [...items];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next.map((item, order) => ({ ...item, order }));
+}
+
 const ENGLISH: Record<BlockType, Template> = {
   reading: () => ({
     id: newId(),
@@ -141,9 +164,17 @@ const ENGLISH: Record<BlockType, Template> = {
     title: "Put the steps in order",
     payload: {
       variant: "sort",
+      feedback: {
+        correct: "Correct. The steps follow the lesson's sequence.",
+        incorrect: "Not quite. Review the order described in the lesson.",
+      },
+      hint: "Look for the sequence in the lesson.",
       items: [
         { text: "First step", order: 0 },
         { text: "Second step", order: 1 },
+        { text: "Third step", order: 2 },
+        { text: "Fourth step", order: 3 },
+        { text: "Fifth step", order: 4 },
       ],
     },
   }),
@@ -155,6 +186,12 @@ const ENGLISH: Record<BlockType, Template> = {
       intro: "You are about to make a decision. Read the situation and choose.",
       start: "start",
       end: "end",
+      motion: {
+        nodeEnter: "fade-up",
+        choiceSelected: "emphasis-pulse",
+        feedbackReveal: "slide-feedback",
+        summaryEnter: "summary-rise",
+      },
       nodes: {
         start: {
           text: "Describe the situation the learner is in.",
@@ -263,9 +300,17 @@ const CHINESE: Record<BlockType, Template> = {
     title: "把步骤排好序",
     payload: {
       variant: "sort",
+      feedback: {
+        correct: "正确，这个顺序符合课程内容。",
+        incorrect: "还不对，请复习课程中介绍的顺序。",
+      },
+      hint: "找出课程中描述的先后顺序。",
       items: [
         { text: "第一步", order: 0 },
         { text: "第二步", order: 1 },
+        { text: "第三步", order: 2 },
+        { text: "第四步", order: 3 },
+        { text: "第五步", order: 4 },
       ],
     },
   }),
@@ -277,6 +322,12 @@ const CHINESE: Record<BlockType, Template> = {
       intro: "你即将做出一个决定。读完情境后做出选择。",
       start: "start",
       end: "end",
+      motion: {
+        nodeEnter: "fade-up",
+        choiceSelected: "emphasis-pulse",
+        feedbackReveal: "slide-feedback",
+        summaryEnter: "summary-rise",
+      },
       nodes: {
         start: {
           text: "描述学习者所处的情境。",
@@ -322,4 +373,86 @@ const CHINESE: Record<BlockType, Template> = {
 export function createBlock(type: BlockType, locale: Locale = "en"): Block {
   const templates = locale === "zh" ? CHINESE : ENGLISH;
   return templates[type]();
+}
+
+/** Game Activities require exactly five Challenges to validate and publish. */
+export const GAME_ACTIVITY_CHALLENGE_COUNT = 5;
+
+/**
+ * Builds a Game Activity with five Challenges. Optional seeds (e.g. legacy
+ * standalone `game` blocks) fill the first slots; the rest are templates.
+ */
+export function createGameActivity(
+  locale: Locale = "en",
+  options?: {
+    id?: string;
+    title?: string;
+    seedChallenges?: readonly LegacyGameBlock[];
+  },
+): GameActivityContainer {
+  const challenges: GameBlock[] = (options?.seedChallenges ?? []).map((block) => gameChallengeBlockSchema.parse(block));
+  while (challenges.length < GAME_ACTIVITY_CHALLENGE_COUNT) {
+    challenges.push(createBlock("game", locale) as GameBlock);
+  }
+
+  return {
+    id: options?.id ?? crypto.randomUUID(),
+    title:
+      options?.title ??
+      (locale === "zh" ? "课程练习" : "Lesson Practice"),
+    challenges: challenges.slice(0, GAME_ACTIVITY_CHALLENGE_COUNT),
+  };
+}
+
+/** Challenge shape used to detect an untouched add-block scaffold. */
+function challengeTemplateShape(challenge: GameBlock): unknown {
+  return { title: challenge.title, type: challenge.type, payload: challenge.payload };
+}
+
+/**
+ * True when the activity still matches the locale's add-block Game Activity
+ * starter (default title + five template Challenges; ids may differ). Missing
+ * activities are handled by callers, not here.
+ */
+export function isTemplateGameActivity(
+  activity: GameActivityContainer,
+  locale: Locale = "en",
+): boolean {
+  if (activity.challenges.length !== GAME_ACTIVITY_CHALLENGE_COUNT) {
+    return false;
+  }
+
+  const starter = createGameActivity(locale);
+  if (activity.title !== starter.title) {
+    return false;
+  }
+
+  const templateShape = challengeTemplateShape(
+    createBlock("game", locale) as GameBlock,
+  );
+  return activity.challenges.every(
+    (challenge) =>
+      JSON.stringify(challengeTemplateShape(challenge)) ===
+      JSON.stringify(templateShape),
+  );
+}
+
+/** Simulation shape used to detect an untouched add-block starter. */
+function simulationTemplateShape(block: SimulationBlock): unknown {
+  return { title: block.title, type: block.type, payload: block.payload };
+}
+
+/**
+ * True when the Simulation Block still matches the locale's add-block template
+ * (the id may differ).
+ */
+export function isTemplateSimulationBlock(
+  block: SimulationBlock,
+  locale: Locale = "en",
+): boolean {
+  const template = createBlock("simulation", locale) as SimulationBlock;
+  return (
+    JSON.stringify(simulationTemplateShape(block)) ===
+    JSON.stringify(simulationTemplateShape(template))
+  );
 }

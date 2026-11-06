@@ -84,9 +84,18 @@ export function llmApiKey(): string | null {
 /**
  * Optional OpenAI-compatible gateway (e.g. OpenRouter). When unset the client
  * talks to api.openai.com directly.
+ *
+ * Accepts either the API root (`…/v1`) or a pasted full chat-completions URL
+ * (`…/v1/chat/completions`). The AI SDK appends `/chat/completions` itself, so
+ * a full endpoint must be trimmed or every call 404s on a duplicated path.
  */
 export function llmBaseUrl(): string | null {
-  return readEnv("LLM_BASE_URL");
+  const raw = readEnv("LLM_BASE_URL");
+  if (raw === null) {
+    return null;
+  }
+
+  return raw.replace(/\/+$/, "").replace(/\/chat\/completions$/i, "");
 }
 
 /**

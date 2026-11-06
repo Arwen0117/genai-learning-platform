@@ -198,12 +198,20 @@ export function gradeActivity(
           ...base,
           score: normalizedScore(correct, 0, order.length),
           passed: correct === order.length,
-          completed: correct === order.length,
+          completed: true,
           verification: "server",
-          feedback: { correct, total: order.length },
+          feedback: {
+            correct,
+            total: order.length,
+            correction:
+              correct === order.length
+                ? null
+                : { expected },
+          },
         };
       }
-      const choices = z
+      if (p.variant === "match") {
+        const choices = z
         .array(
           z.object({
             left: z.number().int().nonnegative(),
@@ -212,26 +220,51 @@ export function gradeActivity(
         )
         .min(1)
         .max(2000)
-        .parse(answer.choices);
-      if (
-        choices.some(
-          (c) => c.left >= p.pairs.length || c.right >= p.pairs.length,
+          .parse(answer.choices);
+        if (
+          choices.some(
+            (c) => c.left >= p.pairs.length || c.right >= p.pairs.length,
+          )
         )
-      )
-        throw new Error("Invalid pair.");
-      const matched = new Set(
-        choices.filter((c) => c.left === c.right).map((c) => c.left),
-      );
+          throw new Error("Invalid pair.");
+        const matched = new Set(
+          choices.filter((c) => c.left === c.right).map((c) => c.left),
+        );
+        return {
+          ...base,
+          score: normalizedScore(matched.size, 0, p.pairs.length),
+          completed: true,
+          passed: matched.size === p.pairs.length,
+          verification: "server",
+          feedback: {
+            correct: matched.size,
+            total: p.pairs.length,
+            attempts: choices.length,
+            correction:
+              matched.size === p.pairs.length
+                ? null
+                : { expected: p.pairs.map((_, index) => index) },
+          },
+        };
+      }
+      const option = z
+        .number()
+        .int()
+        .nonnegative()
+        .max(p.options.length - 1)
+        .parse(answer.option);
+      const correct = p.options[option]?.correct === true;
       return {
         ...base,
-        score: normalizedScore(matched.size, 0, p.pairs.length),
-        completed: matched.size === p.pairs.length,
-        passed: matched.size === p.pairs.length,
+        completed: true,
+        passed: correct,
         verification: "server",
         feedback: {
-          correct: matched.size,
-          total: p.pairs.length,
-          attempts: choices.length,
+          correct,
+          selected: option,
+          correction: correct
+            ? null
+            : { answer: p.options.find((item) => item.correct)?.text ?? "" },
         },
       };
     }

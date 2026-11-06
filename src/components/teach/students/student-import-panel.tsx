@@ -10,6 +10,10 @@ import {
   MAX_IMPORT_ROWS,
   toCsvDocument,
 } from "@/lib/csv";
+import {
+  rosterCsvTemplateDocument,
+  rosterCsvTemplateText,
+} from "@/lib/roster-csv-template";
 import { useT } from "@/i18n/client";
 import type { ImportCredential, ImportStudentsResult } from "@/lib/students";
 import { importStudents } from "@/server/students";
@@ -23,10 +27,22 @@ import { importStudents } from "@/server/students";
  * accounts created in this run.
  */
 
-const TEMPLATE = `name,email
-Ada Lovelace,ada.lovelace@example.com
-Alan Turing,alan.turing@example.com
-Grace Hopper,grace.hopper@example.com`;
+function downloadRosterTemplate(): void {
+  const url = URL.createObjectURL(
+    new Blob([rosterCsvTemplateDocument()], {
+      type: "text/csv;charset=utf-8",
+    }),
+  );
+  const anchor = window.document.createElement("a");
+  anchor.href = url;
+  anchor.download = "roster-template.csv";
+  window.document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 60_000);
+}
 
 type Tone = "default" | "success" | "danger";
 
@@ -166,8 +182,18 @@ export function StudentImportPanel({
           {t("students.import.template")}
         </summary>
         <pre className="mt-2 overflow-x-auto rounded-lg bg-muted/60 p-3 font-mono text-xs">
-          {TEMPLATE}
+          {rosterCsvTemplateText()}
         </pre>
+        <Button
+          className="mt-2 gap-1.5"
+          onClick={downloadRosterTemplate}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <Download aria-hidden="true" />
+          {t("students.import.templateDownload")}
+        </Button>
       </details>
 
       <div className="flex flex-wrap items-center gap-3">

@@ -8,6 +8,7 @@ import {
   isMockMode,
   LlmValidationError,
   llmApiKey,
+  llmBaseUrl,
 } from "@/lib/llm/provider";
 
 const answerSchema = z.object({
@@ -15,7 +16,7 @@ const answerSchema = z.object({
   body: z.string(),
 });
 
-const ENV_KEYS = ["LLM_API_KEY", "LLM_MOCK", "LLM_MODEL"] as const;
+const ENV_KEYS = ["LLM_API_KEY", "LLM_MOCK", "LLM_MODEL", "LLM_BASE_URL"] as const;
 const savedEnv = new Map<string, string | undefined>();
 
 const { createJob, createdJobs } = vi.hoisted(() => {
@@ -75,6 +76,30 @@ afterEach(() => {
       process.env[key] = value;
     }
   }
+});
+
+describe("llmBaseUrl", () => {
+  it("returns null when unset", () => {
+    delete process.env.LLM_BASE_URL;
+    expect(llmBaseUrl()).toBeNull();
+  });
+
+  it("keeps an API root unchanged", () => {
+    process.env.LLM_BASE_URL = "https://openrouter.ai/api/v1";
+    expect(llmBaseUrl()).toBe("https://openrouter.ai/api/v1");
+  });
+
+  it("strips a pasted /chat/completions suffix", () => {
+    process.env.LLM_BASE_URL =
+      "https://openrouter.ai/api/v1/chat/completions";
+    expect(llmBaseUrl()).toBe("https://openrouter.ai/api/v1");
+  });
+
+  it("strips trailing slashes before normalizing", () => {
+    process.env.LLM_BASE_URL =
+      "https://openrouter.ai/api/v1/chat/completions/";
+    expect(llmBaseUrl()).toBe("https://openrouter.ai/api/v1");
+  });
 });
 
 describe("isMockMode", () => {

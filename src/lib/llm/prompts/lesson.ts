@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { blockSchema } from "@/lib/blocks/schema";
+import { gameActivityContainerSchema } from "@/lib/game-activity";
 import {
   CONTENT_LANGUAGE_LABEL,
   contentLanguageLine,
@@ -35,7 +36,8 @@ export const generatedLessonSchema = z
   .object({
     title: z.string().min(2).max(120),
     estimatedMinutes: z.number().int().min(3).max(45),
-    blocks: z.array(blockSchema).min(3).max(6),
+    blocks: z.array(blockSchema).min(3).max(11),
+    gameActivity: gameActivityContainerSchema.optional(),
   })
   .superRefine((lesson, ctx) => {
     lesson.blocks.forEach((block, index) => {
@@ -119,6 +121,10 @@ const BLOCK_REFERENCE: readonly string[] = [
   '                         "items": [{"text": string, "order": number}]}}',
   'simulation: {"id": string, "title": string, "type": "simulation",',
   '             "payload": {"intro": string, "start": string, "end": string,',
+  '                         "motion": {"nodeEnter": "fade-up",',
+  '                           "choiceSelected": "emphasis-pulse",',
+  '                           "feedbackReveal": "slide-feedback",',
+  '                           "summaryEnter": "summary-rise"},',
   '                         "nodes": {"<node id>": {"text": string,',
   '                           "options": [{"label": string, "next": string,',
   '                           "feedback": string, "score": number}]}}}}',
@@ -177,12 +183,19 @@ export function lessonPrompt(request: LessonRequest): string {
     "- Flashcards: six to eight cards. Game: five pairs (match) or five items",
     "  with distinct orders 1-5 (sort). Slides: four to six pages, each with a",
     "  plain-text narration of 40 to 80 words.",
+    "- When the lesson includes game practice, generate a five-Challenge Game",
+    "  Activity using Sort, Match, and Choose formats. Each Challenge needs",
+    "  deterministic answer metadata, correct and incorrect feedback, and an",
+    "  optional hint. Choose Challenges need at least two plausible distractors.",
     "- Coding: `starter` is runnable JavaScript that declares the function the",
     "  learner must fix; every test `expression` is a boolean expression",
     "  evaluated after the code runs, for example reverse(\"abc\") === \"cba\".",
     "- Simulation: `start` and `end` must be keys of `nodes`; every node except",
     "  `end` needs at least one option; `score` is a whole number and may be",
-    "  negative.",
+    "  negative. Include `payload.motion` with catalog pattern ids only",
+    "  (fade-up, emphasis-pulse, slide-feedback, summary-rise, or none).",
+    "  Never invent Supporting media URLs, paths, or media objects — instructors",
+    "  attach materials in the editor.",
     "- Roleplay: a scenario, the persona the AI plays, the learner's goal and a",
     "  rubric of three or four criteria.",
     `- Write every learner-visible string in ${CONTENT_LANGUAGE_LABEL[language]}, use no emoji, and do not wrap the reply in code fences.`,

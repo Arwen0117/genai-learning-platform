@@ -29,8 +29,22 @@ import {
   lessonPrompt,
   type GeneratedLesson,
 } from "@/lib/llm/prompts/lesson";
+import {
+  gameActivityPrompt,
+  generatedGameActivitySchema,
+  type GeneratedGameActivity,
+} from "@/lib/llm/prompts/game-activity";
+import {
+  generatedSimulationBlockSchema,
+  simulationBlockPrompt,
+  type GeneratedSimulationBlock,
+} from "@/lib/llm/prompts/simulation-block";
 import type { Translator } from "@/i18n/translate";
 import { prisma } from "@/lib/prisma";
+import {
+  gameActivityContainerSchema,
+  validateGameActivity,
+} from "@/lib/game-activity";
 
 /**
  * Server actions behind the instructor course wizard (P4.6).
@@ -51,6 +65,14 @@ export type OutlineResult =
 
 export type LessonResult =
   | { ok: true; lesson: GeneratedLesson }
+  | { ok: false; error: string };
+
+export type GameActivityResult =
+  | { ok: true; activity: GeneratedGameActivity }
+  | { ok: false; error: string };
+
+export type SimulationBlockResult =
+  | { ok: true; block: GeneratedSimulationBlock }
   | { ok: false; error: string };
 
 export type SaveDraftResult =
@@ -83,12 +105,25 @@ const lessonInputSchema = z.object({
   lessonCount: z.number().int().min(1).max(12),
 });
 
+const gameActivityInputSchema = z.object({
+  lessonTitle: z.string().trim().min(2).max(120),
+  objectives: z.string().trim().min(1).max(1200),
+  sourceContent: z.string().trim().min(20).max(20_000),
+});
+
+export type GameActivityInput = z.input<typeof gameActivityInputSchema>;
+
+/** Same lesson-scoped fields as Game Activity generate; dedicated Simulation action. */
+const simulationBlockInputSchema = gameActivityInputSchema;
+export type SimulationBlockInput = z.input<typeof simulationBlockInputSchema>;
+
 export type LessonInput = z.input<typeof lessonInputSchema>;
 
 const draftLessonSchema = z.object({
   title: z.string().trim().min(2).max(120),
   estimatedMinutes: z.number().int().min(1).max(60),
   blocks: z.array(blockSchema).min(1).max(8),
+  gameActivity: gameActivityContainerSchema.optional(),
 });
 
 const draftInputSchema = z.object({
@@ -296,6 +331,31 @@ export async function generateLessonBlocks(
       input: jobInput,
       temperature: 0.5,
     });
+    const activityPrompt = gameActivityPrompt({
+      lessonTitle: request.lessonTitle,
+      objectives: request.lessonSummary,
+      sourceContent: JSON.stringify(
+        lesson.blocks.filter((block) => block.type !== "game"),
+      ).slice(0, 20_000),
+      language,
+    });
+    const activity = await generateJson(
+      generatedGameActivitySchema,
+      activityPrompt,
+      {
+        usage: "course-game-activity",
+        userId: instructor.userId,
+        input: jobInput,
+        temperature: 0.4,
+      },
+    );
+    const activityValidation = validateGameActivity(activity, language);
+    if (!activityValidation.ok) {
+      return {
+        ok: false,
+        error: `Generated activity needs review: ${activityValidation.errors.join(" ")}`,
+      };
+    }
 
     await recordMockJob({
       usage: "course-lesson",
@@ -305,7 +365,83 @@ export async function generateLessonBlocks(
       output: lesson,
     });
 
-    return { ok: true, lesson };
+    return {
+      ok: true,
+      lesson: {
+        ...lesson,
+        gameActivity: activity,
+        blocks: [
+          ...lesson.blocks.filter((block) => block.type !== "game"),
+        ],
+      },
+    };
+  } catch (error: unknown) {
+    return { ok: false, error: describeFailure("lesson", error, t) };
+  }
+}
+
+/** Generates the five-Challenge practice activity for an authored lesson. */
+export async function generateGameActivity(
+  input: GameActivityInput,
+): Promise<GameActivityResult> {
+  const { locale, t } = await getI18n();
+  const parsedInput = gameActivityInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    return { ok: false, error: t("server.teach.lessonInvalid") };
+  }
+
+  const instructor = await requireInstructor(t);
+  if (!instructor.ok) return { ok: false, error: instructor.error };
+
+  registerLlmMocks();
+  const language = contentLanguageFromLocale(locale);
+  const prompt = gameActivityPrompt({ ...parsedInput.data, language });
+
+  try {
+    const activity = await generateJson(generatedGameActivitySchema, prompt, {
+      usage: "course-game-activity",
+      userId: instructor.userId,
+      input: parsedInput.data,
+      temperature: 0.4,
+    });
+    const validation = validateGameActivity(activity, language);
+    if (!validation.ok) {
+      return {
+        ok: false,
+        error: `Generated activity needs review: ${validation.errors.join(" ")}`,
+      };
+    }
+    return { ok: true, activity };
+  } catch (error: unknown) {
+    return { ok: false, error: describeFailure("lesson", error, t) };
+  }
+}
+
+/** Generates one Simulation Block from lesson-scoped editor context. */
+export async function generateSimulationBlock(
+  input: SimulationBlockInput,
+): Promise<SimulationBlockResult> {
+  const { locale, t } = await getI18n();
+  const parsedInput = simulationBlockInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    return { ok: false, error: t("server.teach.lessonInvalid") };
+  }
+
+  const instructor = await requireInstructor(t);
+  if (!instructor.ok) return { ok: false, error: instructor.error };
+
+  registerLlmMocks();
+  const language = contentLanguageFromLocale(locale);
+  const prompt = simulationBlockPrompt({ ...parsedInput.data, language });
+
+  try {
+    const block = await generateJson(generatedSimulationBlockSchema, prompt, {
+      usage: "course-simulation-block",
+      userId: instructor.userId,
+      input: parsedInput.data,
+      temperature: 0.4,
+    });
+    return { ok: true, block };
   } catch (error: unknown) {
     return { ok: false, error: describeFailure("lesson", error, t) };
   }
@@ -362,6 +498,9 @@ export async function saveCourseDraft(
                 order: lessonIndex,
                 estimatedMinutes: lesson.estimatedMinutes,
                 blocks: lesson.blocks as unknown as Prisma.InputJsonValue,
+                gameActivity: lesson.gameActivity as
+                  | Prisma.InputJsonValue
+                  | undefined,
               })),
             },
           })),

@@ -24,6 +24,8 @@ export type BlockRendererProps = {
   /** Whether this block is already recorded in the learner's lesson progress. */
   preview?: boolean;
   completed?: boolean;
+  /** Whether this Challenge is waiting for an earlier Challenge in its activity. */
+  locked?: boolean;
   /** Whether the learner replaced this block's content (P4.4 override). */
   overridden?: boolean;
   /**
@@ -44,6 +46,7 @@ export function BlockRenderer(props: BlockRendererProps) {
     courseId,
     lessonId,
     completed = false,
+    locked = false,
     overridden = false,
     onComplete,
     preview = false,
@@ -143,7 +146,9 @@ export function BlockRenderer(props: BlockRendererProps) {
     <section className="rounded-xl ring-1 ring-foreground/10">
       <header className="flex items-center gap-2 border-b px-4 py-3">
         <h2 className="text-sm font-medium">{block.title}</h2>
-        <Badge variant="secondary">{block.type}</Badge>
+        <Badge variant="secondary">
+          {block.type === "game" ? t("block.challenge") : block.type}
+        </Badge>
         {overridden ? (
           <Badge variant="outline">{t("block.renderer.personalised")}</Badge>
         ) : null}
@@ -152,6 +157,11 @@ export function BlockRenderer(props: BlockRendererProps) {
             <span className="flex items-center gap-1 text-xs text-emerald-600">
               <Check aria-hidden="true" className="size-3.5" />
               {t("block.renderer.done")}
+            </span>
+          ) : null}
+          {locked ? (
+            <span className="text-xs text-muted-foreground">
+              {t("block.renderer.locked")}
             </span>
           ) : null}
           {preview && previewCompleted ? (
@@ -170,17 +180,23 @@ export function BlockRenderer(props: BlockRendererProps) {
         </span>
       </header>
 
-      <div className="px-4 py-4">
-        <Component
-          block={block}
-          completed={isCompleted}
-          context={{ courseId, lessonId, preview }}
-          onAttempt={handleAttempt}
-          onComplete={handleComplete}
-        />
-      </div>
+      {locked ? (
+        <p className="px-4 py-4 text-sm text-muted-foreground">
+          {t("block.renderer.lockedHint")}
+        </p>
+      ) : (
+        <div className="px-4 py-4">
+          <Component
+            block={block}
+            completed={isCompleted}
+            context={{ courseId, lessonId, preview }}
+            onAttempt={handleAttempt}
+            onComplete={handleComplete}
+          />
+        </div>
+      )}
 
-      {preview ? null : (
+      {preview || locked ? null : (
         <AttemptHistory
           blockId={block.id}
           lessonId={lessonId}

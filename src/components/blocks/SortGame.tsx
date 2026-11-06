@@ -8,12 +8,15 @@ import {
   RotateCcw,
   Shuffle,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useT } from "@/i18n/client";
+import { moveSortRow } from "@/lib/blocks/sort";
 import type { SortItem } from "@/lib/blocks/schema";
 import { cn } from "@/lib/utils";
+import type { GameRecovery } from "./GameBlock";
+import { isGameSubmission } from "./game-recovery";
 
 /**
  * Sort game: put the rows in the right order.
@@ -34,6 +37,9 @@ export type SortGameProps = {
   onComplete: () => void;
   /** Raised once per run so the page can record the finish event. */
   onFinish: (payload: Record<string, unknown>) => void;
+  feedback?: { correct: string; incorrect: string };
+  hint?: string;
+  recovery?: GameRecovery;
 };
 
 type Row = {
@@ -61,6 +67,9 @@ export function SortGame({
   completed,
   onComplete,
   onFinish,
+  feedback: generatedFeedback,
+  hint: generatedHint,
+  recovery,
 }: SortGameProps) {
   /** `order` values in the order the rows should end up in. */
   const targetOrders = useMemo(
@@ -75,6 +84,50 @@ export function SortGame({
   const [attempts, setAttempts] = useState(0);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [solved, setSolved] = useState(false);
+  const [hintsUsed, setHintsUsed] = useState(0);
+  const [hint, setHint] = useState<string | null>(null);
+  const [playthrough, setPlaythrough] = useState(1);
+  const playthroughId = useRef(crypto.randomUUID());
+  const progressReported = useRef(completed);
+
+  useEffect(() => {
+    const attempts = recovery?.attempts ?? [];
+    if (typeof recovery?.playthroughId === "string")
+      playthroughId.current = recovery.playthroughId;
+    if (attempts.length === 0) return;
+    const submissions = attempts.filter((attempt) => isGameSubmission(attempt.answer));
+    const latest = submissions.at(-1);
+    if (!latest) return;
+    const answer = latest.answer;
+    if (Array.isArray(answer.order)) {
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      const locked = new Set(
+        Array.isArray(answer.locked) ? answer.locked : latest.completed ? answer.order : [],
+      );
+      const recovered = answer.order.flatMap((id) => {
+        const row = byId.get(id);
+        return typeof id === "number" && row
+          ? [{ ...row, locked: locked.has(id) }]
+          : [];
+      });
+      if (recovered.length === rows.length)
+        queueMicrotask(() => setRows(recovered));
+    }
+    queueMicrotask(() => {
+      setAttempts(
+        typeof answer.attempts === "number" ? answer.attempts : submissions.length,
+      );
+      setHintsUsed(
+        attempts.filter((attempt) => attempt.answer.kind === "hint").length,
+      );
+      setSolved(latest.completed);
+      if (typeof answer.playthrough === "number") setPlaythrough(answer.playthrough);
+      if (typeof answer.playthroughId === "string")
+        playthroughId.current = answer.playthroughId;
+    });
+    // `rows` is intentionally the initial local layout used to rebuild a run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recovery]);
 
   /** Positions that can still be moved: everything the check has not locked. */
   const freeSlots = rows
@@ -85,30 +138,23 @@ export function SortGame({
   const canMoveUp = selectedSlot > 0;
   const canMoveDown = selectedSlot >= 0 && selectedSlot < freeSlots.length - 1;
 
-  function move(direction: -1 | 1): void {
-    if (selected === null) {
-      return;
-    }
-
-    const slot = freeSlots.indexOf(selected);
+  function moveFrom(index: number, direction: -1 | 1): void {
+    const slot = freeSlots.indexOf(index);
+    if (slot < 0) return;
     const target = freeSlots[slot + direction];
-    if (slot < 0 || target === undefined) {
-      return;
-    }
+    if (target === undefined) return;
 
     setRows((previous) => {
-      const next = [...previous];
-      const moving = next[selected];
-      const displaced = next[target];
-      if (moving === undefined || displaced === undefined) {
-        return previous;
-      }
-      next[selected] = displaced;
-      next[target] = moving;
-      return next;
+      return moveSortRow(previous, index, direction);
     });
     setSelected(target);
     setFeedback(null);
+  }
+
+  function move(direction: -1 | 1): void {
+    if (selected !== null) {
+      moveFrom(selected, direction);
+    }
   }
 
   function checkOrder(): void {
@@ -125,16 +171,56 @@ export function SortGame({
       variant: "sort",
       attempts: taken,
       order: rows.map((row) => row.id),
+      locked: nextRows.filter((row) => row.locked).map((row) => row.id),
+      hintsUsed,
+      submission: taken === 1 ? "first" : "retry",
+      playthrough,
+      playthroughId: playthroughId.current,
     });
 
     if (correct === nextRows.length) {
       setSolved(true);
       setSelected(null);
-      setFeedback(t("block.sort.solved", { attempts: taken }));
+      setFeedback(
+        generatedFeedback?.correct ?? t("block.sort.solved", { attempts: taken }),
+      );
+      if (!progressReported.current) {
+        progressReported.current = true;
+        onComplete();
+      }
       return;
     }
 
-    setFeedback(t("block.sort.partial", { correct, total: nextRows.length }));
+    setFeedback(
+      generatedFeedback?.incorrect ??
+        t("block.sort.correction", {
+          order: [...items]
+            .sort((a, b) => a.order - b.order)
+            .map((item) => item.text)
+            .join(", "),
+        }),
+    );
+    // An incorrect response still completes the Challenge so activity
+    // progression can continue after Correction is revealed.
+    if (!progressReported.current) {
+      progressReported.current = true;
+      onComplete();
+    }
+  }
+
+  function showHint(): void {
+    setHintsUsed((count) => count + 1);
+    onFinish({
+      kind: "hint",
+      playthrough,
+      playthroughId: playthroughId.current,
+    });
+    setHint(
+      generatedHint ??
+        t("block.sort.hint", {
+          first: [...items].sort((a, b) => a.order - b.order)[0]?.text ?? "",
+        }),
+    );
   }
 
   function startOver(): void {
@@ -143,6 +229,13 @@ export function SortGame({
     setAttempts(0);
     setFeedback(null);
     setSolved(false);
+    setHintsUsed(0);
+    setHint(null);
+    progressReported.current = false;
+    const nextPlaythroughId = crypto.randomUUID();
+    setPlaythrough((run) => run + 1);
+    playthroughId.current = nextPlaythroughId;
+    onFinish({ kind: "replay", playthroughId: nextPlaythroughId });
   }
 
   return (
@@ -150,6 +243,24 @@ export function SortGame({
       <p className="text-xs text-muted-foreground">
         {t("block.sort.instruction")}
       </p>
+      <div
+        aria-label={t("block.sort.progress", {
+          current: rows.filter((row) => row.locked).length,
+          total: rows.length,
+        })}
+        aria-valuemax={rows.length}
+        aria-valuemin={0}
+        aria-valuenow={rows.filter((row) => row.locked).length}
+        className="h-1.5 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+      >
+        <div
+          className="h-full bg-primary transition-[width]"
+          style={{
+            width: `${(rows.filter((row) => row.locked).length / rows.length) * 100}%`,
+          }}
+        />
+      </div>
 
       <ol className="space-y-2">
         {rows.map((row, index) => (
@@ -165,6 +276,15 @@ export function SortGame({
                     : "bg-muted/50 ring-1 ring-foreground/10 hover:bg-muted",
               )}
               disabled={row.locked}
+              onFocus={() => {
+                setSelected(index);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                  event.preventDefault();
+                  moveFrom(index, event.key === "ArrowUp" ? -1 : 1);
+                }
+              }}
               onClick={() => {
                 setSelected(index);
               }}
@@ -214,9 +334,12 @@ export function SortGame({
           {t("block.sort.check")}
         </Button>
 
+        <Button disabled={solved} onClick={showHint} variant="ghost">
+          {t("common.hint")}
+        </Button>
         <Button onClick={startOver} variant="ghost">
           <RotateCcw aria-hidden="true" />
-          {t("common.startOver")}
+          {attempts > 0 ? t("common.replay") : t("common.startOver")}
         </Button>
 
         <span className="ml-auto text-xs text-muted-foreground tabular-nums">
@@ -230,14 +353,24 @@ export function SortGame({
             "text-xs",
             solved ? "text-emerald-600" : "text-muted-foreground",
           )}
+          role="status"
         >
           {feedback}
+        </p>
+      )}
+      {hint === null ? null : (
+        <p
+          aria-live="polite"
+          className="text-xs text-muted-foreground"
+          role="status"
+        >
+          {hint}
         </p>
       )}
 
       <div className="flex flex-wrap items-center gap-3 border-t pt-4">
         <Button
-          disabled={!solved || completed}
+          disabled={attempts === 0 || completed}
           onClick={onComplete}
           variant={completed ? "secondary" : "default"}
         >
@@ -251,7 +384,9 @@ export function SortGame({
           )}
         </Button>
         <p className="text-xs text-muted-foreground">
-          {solved || completed ? t("block.sort.done") : t("block.sort.need")}
+          {attempts > 0 || completed
+            ? t("block.sort.done")
+            : t("block.sort.need")}
         </p>
       </div>
     </div>

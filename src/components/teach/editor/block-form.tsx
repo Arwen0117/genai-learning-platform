@@ -3,15 +3,12 @@
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+import { CourseProgrammingForm } from "./course-programming-form";
 import { MarkdownView } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useT, useI18n } from "@/i18n/client";
-import { CourseProgrammingForm } from "./course-programming-form";
-import { createParallelProgrammingPayload } from "@/lib/programming-game/parallel-config";
-import { getParallelTemplate } from "@/lib/programming-game/parallel-levels";
-import { GAME_MESSAGES } from "@/components/blocks/programming-game/messages";
+import { useT } from "@/i18n/client";
 import type { Translator } from "@/i18n/translate";
 import type {
   Block,
@@ -19,9 +16,289 @@ import type {
   BlockType,
   QuizQuestion,
   QuestionKind,
+  SupportingMedia,
 } from "@/lib/blocks/schema";
 import { simulationBlockSchema } from "@/lib/blocks/schema";
+import {
+  MOTION_BEATS,
+  MOTION_PATTERN_IDS,
+  type MotionBeat,
+  type MotionPatternId,
+  type SimulationMotionDefaults,
+} from "@/lib/simulation-motion";
+import {
+  CHALLENGE_MAX_ANIMATION_SECONDS,
+  SIMULATION_MAX_ANIMATION_SECONDS,
+} from "@/lib/supporting-media-duration";
 import { cn } from "@/lib/utils";
+import { reorderSortItems } from "./block-templates";
+
+const MOTION_BEAT_LABELS: Record<MotionBeat, string> = {
+  nodeEnter: "Node enter",
+  choiceSelected: "Choice selected",
+  feedbackReveal: "Feedback reveal",
+  summaryEnter: "Summary enter",
+};
+
+function SupportingMediaFields({
+  media,
+  maxDurationSeconds,
+  onChange,
+}: {
+  media: SupportingMedia | undefined;
+  maxDurationSeconds: number;
+  onChange: (next: SupportingMedia | undefined) => void;
+}) {
+  return (
+    <fieldset className="space-y-2 rounded-lg border p-3">
+      <legend className="px-1 text-xs font-medium">Supporting media</legend>
+      <p className="text-[11px] text-muted-foreground">
+        Optional, approved media enriches the activity; the text remains the
+        complete learning path.
+      </p>
+      <Field label="Media URL">
+        <Input
+          placeholder="/media/example.png or https://…"
+          value={media?.url ?? ""}
+          onChange={(event) => {
+            const url = event.target.value.trim();
+            if (url.length === 0) {
+              onChange(undefined);
+              return;
+            }
+            onChange(
+              media ?? {
+                kind: "image",
+                url,
+                approvalStatus: "pending",
+                moderationStatus: "pending",
+                provenance: { source: "instructor-provided" },
+                decorative: false,
+              },
+            );
+            if (media !== undefined) onChange({ ...media, url });
+          }}
+        />
+      </Field>
+      {media === undefined ? null : (
+        <>
+          <Field label="Media type">
+            <select
+              className={SELECT_CLASS}
+              value={media.kind}
+              onChange={(event) => {
+                if (event.target.value === media.kind) return;
+                onChange(
+                  media.kind === "image"
+                    ? { ...media, kind: "animation", durationSeconds: 1 }
+                    : {
+                        kind: "image",
+                        url: media.url,
+                        approvalStatus: media.approvalStatus,
+                        moderationStatus: media.moderationStatus,
+                        provenance: media.provenance,
+                        altText: media.altText,
+                        decorative: media.decorative,
+                      },
+                );
+              }}
+            >
+              <option value="image">Image</option>
+              <option value="animation">Animation</option>
+            </select>
+          </Field>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Field label="Approval">
+              <select
+                className={SELECT_CLASS}
+                value={media.approvalStatus}
+                onChange={(event) => {
+                  onChange({
+                    ...media,
+                    approvalStatus: event.target
+                      .value as SupportingMedia["approvalStatus"],
+                  });
+                }}
+              >
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </Field>
+            <Field label="Safety moderation">
+              <select
+                className={SELECT_CLASS}
+                value={media.moderationStatus}
+                onChange={(event) => {
+                  onChange({
+                    ...media,
+                    moderationStatus: event.target
+                      .value as SupportingMedia["moderationStatus"],
+                  });
+                }}
+              >
+                <option value="pending">Pending</option>
+                <option value="passed">Passed</option>
+                <option value="failed">Failed</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="Provenance">
+            <select
+              className={SELECT_CLASS}
+              value={media.provenance.source}
+              onChange={(event) => {
+                onChange({
+                  ...media,
+                  provenance: {
+                    ...media.provenance,
+                    source: event.target
+                      .value as SupportingMedia["provenance"]["source"],
+                  },
+                });
+              }}
+            >
+              <option value="instructor-provided">Instructor-provided</option>
+              <option value="model-generated">Model-generated</option>
+            </select>
+          </Field>
+          {media.provenance.source === "model-generated" ? (
+            <>
+              <Field label="Generating model">
+                <Input
+                  placeholder="Model identifier"
+                  value={media.provenance.model ?? ""}
+                  onChange={(event) => {
+                    const model = event.target.value;
+                    onChange({
+                      ...media,
+                      provenance: {
+                        ...media.provenance,
+                        model: model.length > 0 ? model : undefined,
+                      },
+                    });
+                  }}
+                />
+              </Field>
+              <Field label="Generated at">
+                <Input
+                  placeholder="2026-10-28T12:00:00.000Z"
+                  value={media.provenance.generatedAt ?? ""}
+                  onChange={(event) => {
+                    const generatedAt = event.target.value;
+                    onChange({
+                      ...media,
+                      provenance: {
+                        ...media.provenance,
+                        generatedAt:
+                          generatedAt.length > 0 ? generatedAt : undefined,
+                      },
+                    });
+                  }}
+                />
+              </Field>
+            </>
+          ) : null}
+          <Field label="Alt text">
+            <Input
+              placeholder="Describe the media for learners"
+              value={media.altText ?? ""}
+              onChange={(event) => {
+                const altText = event.target.value;
+                onChange({
+                  ...media,
+                  altText: altText.length > 0 ? altText : undefined,
+                });
+              }}
+            />
+          </Field>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              checked={media.decorative}
+              onChange={(event) => {
+                onChange({ ...media, decorative: event.target.checked });
+              }}
+              type="checkbox"
+            />
+            Decorative media (no alt text needed)
+          </label>
+          {media.kind === "animation" ? (
+            <Field
+              hint={`Maximum ${maxDurationSeconds} seconds`}
+              label="Duration (seconds)"
+            >
+              <Input
+                max={maxDurationSeconds}
+                min={0.1}
+                onChange={(event) => {
+                  const durationSeconds = Number(event.target.value);
+                  onChange({
+                    ...media,
+                    durationSeconds: Number.isFinite(durationSeconds)
+                      ? durationSeconds
+                      : 0.1,
+                  });
+                }}
+                type="number"
+                value={media.durationSeconds}
+              />
+            </Field>
+          ) : null}
+        </>
+      )}
+    </fieldset>
+  );
+}
+
+function MotionDefaultsFields({
+  motion,
+  onChange,
+  legend,
+}: {
+  motion: SimulationMotionDefaults | undefined;
+  onChange: (next: SimulationMotionDefaults | undefined) => void;
+  legend: string;
+}) {
+  function setBeat(beat: MotionBeat, value: string): void {
+    const next: SimulationMotionDefaults = { ...(motion ?? {}) };
+    if (value === "") {
+      delete next[beat];
+    } else {
+      next[beat] = value as MotionPatternId;
+    }
+    onChange(Object.keys(next).length === 0 ? undefined : next);
+  }
+
+  return (
+    <fieldset className="space-y-2 rounded-lg border p-3">
+      <legend className="px-1 text-xs font-medium">{legend}</legend>
+      <p className="text-[11px] text-muted-foreground">
+        Pick catalog patterns per beat. Clear a beat to fall back to the next
+        default layer.
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {MOTION_BEATS.map((beat) => (
+          <Field key={beat} label={MOTION_BEAT_LABELS[beat]}>
+            <select
+              className={SELECT_CLASS}
+              value={motion?.[beat] ?? ""}
+              onChange={(event) => {
+                setBeat(beat, event.target.value);
+              }}
+            >
+              <option value="">(default)</option>
+              {MOTION_PATTERN_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 
 /**
  * Per-type editing forms for the course editor (P5.1).
@@ -940,11 +1217,15 @@ function CodingForm({ block, onChange }: FormProps<"coding">) {
   );
 }
 
-function GameForm({ block, onChange }: FormProps<"game">) {
+function GameForm(props: FormProps<"game">) {
+  if (props.block.payload.variant === "programming") return <CourseProgrammingForm payload={props.block.payload} onChange={(payload) => props.onChange({ ...props.block, payload })} onPreset={(payload, title) => props.onChange({ ...props.block, title, payload })} />;
+  return <ChallengeGameForm {...props} block={{ ...props.block, payload: props.block.payload }} />;
+}
+
+function ChallengeGameForm({ block, onChange }: { block: import("@/lib/blocks/schema").GameChallengeBlock; onChange: FormProps<"game">["onChange"] }) {
   const t = useT();
-  const { locale } = useI18n();
-  const m = GAME_MESSAGES[locale];
   const payload = block.payload;
+  const feedback = payload.feedback ?? { correct: "", incorrect: "" };
   const sortedItems =
     payload.variant === "sort"
       ? [...payload.items].sort((a, b) => a.order - b.order)
@@ -959,37 +1240,67 @@ function GameForm({ block, onChange }: FormProps<"game">) {
     });
   }
   function moveItem(index: number, delta: number): void {
-    const items = [...sortedItems];
-    const target = index + delta;
-    if (target < 0 || target >= items.length) return;
-    [items[index], items[target]] = [items[target], items[index]];
-    updateItems(items);
+    if (delta !== -1 && delta !== 1) return;
+    updateItems(reorderSortItems(sortedItems, index, delta));
   }
 
-  function switchVariant(variant: "sort" | "match" | "programming"): void {
+  function switchVariant(variant: "sort" | "match" | "choose"): void {
     if (payload.variant === variant) {
       return;
     }
+    const metadata = {
+      ...(payload.feedback === undefined ? {} : { feedback: payload.feedback }),
+      ...(payload.hint === undefined ? {} : { hint: payload.hint }),
+      ...(payload.supportingMedia === undefined
+        ? {}
+        : { supportingMedia: payload.supportingMedia }),
+    };
 
-    if (variant === "programming") {
-      onChange({ ...block, title: getParallelTemplate("parallel-lanes").title[locale], payload: createParallelProgrammingPayload("parallel-lanes", locale) });
-      return;
-    }
     if (variant === "sort") {
       onChange({
         ...block,
         payload: {
           variant: "sort",
+          ...metadata,
           items:
             payload.variant === "match"
               ? payload.pairs.map((pair, index) => ({
                   text: pair.left,
                   order: index,
                 }))
-              : payload.variant === "sort" ? payload.items : [
-                { text: locale === "zh" ? "第一步" : "First step", order: 0 },
-                { text: locale === "zh" ? "第二步" : "Second step", order: 1 },
-              ],
+              : payload.variant === "choose"
+                ? payload.options.map((option, index) => ({
+                    text: option.text,
+                    order: index,
+                  }))
+                : payload.items,
+        },
+      });
+      return;
+    }
+
+    if (variant === "choose") {
+      onChange({
+        ...block,
+        payload: {
+          variant: "choose",
+          ...metadata,
+          prompt:
+            payload.variant === "choose"
+              ? payload.prompt
+              : "Which option best answers the prompt?",
+          options:
+            payload.variant === "choose"
+              ? payload.options
+              : payload.variant === "match"
+                ? payload.pairs.map((pair, index) => ({
+                    text: pair.right,
+                    correct: index === 0,
+                  }))
+                : payload.items.map((item, index) => ({
+                    text: item.text,
+                    correct: index === 0,
+                  })),
         },
       });
       return;
@@ -999,36 +1310,102 @@ function GameForm({ block, onChange }: FormProps<"game">) {
       ...block,
       payload: {
         variant: "match",
+        ...metadata,
         pairs:
           payload.variant === "sort"
             ? payload.items.map((item) => ({ left: item.text, right: "" }))
-            : payload.variant === "match" ? payload.pairs : [
-              { left: "A", right: "A" }, { left: "B", right: "B" },
-            ],
+            : payload.variant === "choose"
+              ? payload.options.map((option) => ({
+                  left: option.text,
+                  right: "",
+                }))
+              : payload.pairs,
       },
     });
   }
 
+  function updateMedia(next: SupportingMedia | undefined): void {
+    onChange({
+      ...block,
+      payload: { ...payload, supportingMedia: next },
+    });
+  }
+
+  const media = payload.supportingMedia;
+
   return (
     <div className="space-y-3">
+      <Field label="Correct feedback">
+        <Textarea
+          value={feedback.correct}
+          onChange={(event) => {
+            onChange({
+              ...block,
+              payload: {
+                ...payload,
+                feedback: { ...feedback, correct: event.target.value },
+              },
+            });
+          }}
+          placeholder="Explain why the answer is correct."
+          rows={2}
+        />
+      </Field>
+      <Field label="Incorrect feedback">
+        <Textarea
+          value={feedback.incorrect}
+          onChange={(event) => {
+            onChange({
+              ...block,
+              payload: {
+                ...payload,
+                feedback: { ...feedback, incorrect: event.target.value },
+              },
+            });
+          }}
+          placeholder="Guide the learner toward the lesson concept."
+          rows={2}
+        />
+      </Field>
+      <Field hint="Optional" label="Hint">
+        <Input
+          value={payload.hint ?? ""}
+          onChange={(event) => {
+            const hint = event.target.value;
+            onChange({
+              ...block,
+              payload: { ...payload, hint: hint.length > 0 ? hint : undefined },
+            });
+          }}
+          placeholder="Offer a small nudge without giving away the answer."
+        />
+      </Field>
+      <SupportingMediaFields
+        maxDurationSeconds={CHALLENGE_MAX_ANIMATION_SECONDS}
+        media={media}
+        onChange={updateMedia}
+      />
       <Field label={t("editor.game.variant")}>
         <select
           className={SELECT_CLASS}
           onChange={(event) => {
-            switchVariant(event.target.value === "programming" ? "programming" : event.target.value === "match" ? "match" : "sort");
+            switchVariant(
+              event.target.value === "match"
+                ? "match"
+                : event.target.value === "choose"
+                  ? "choose"
+                  : "sort",
+            );
           }}
           value={payload.variant}
         >
           <option value="sort">{t("editor.game.sort")}</option>
           <option value="match">{t("editor.game.match")}</option>
-          {payload.variant === "programming" && <option value="programming">{m.programmingVariant}</option>}
+          <option value="choose">{t("editor.game.choose")}</option>
         </select>
       </Field>
 
-      {payload.variant === "programming" ? (
-        <CourseProgrammingForm payload={payload} onChange={(next) => onChange({ ...block, payload: next })}
-          onPreset={(next, title) => onChange({ ...block, title, payload: next })} />
-      ) : payload.variant === "sort" ? (
+      {payload.variant === "sort" ? (
         <div className="space-y-1.5">
           <p className="text-xs font-medium">{t("editor.game.items")}</p>
           {sortedItems.map((item, index) => (
@@ -1091,7 +1468,7 @@ function GameForm({ block, onChange }: FormProps<"game">) {
             }}
           />
         </div>
-      ) : (
+      ) : payload.variant === "match" ? (
         <div className="space-y-1.5">
           <p className="text-xs font-medium">{t("editor.game.pairs")}</p>
           {payload.pairs.map((pair, index) => (
@@ -1162,6 +1539,88 @@ function GameForm({ block, onChange }: FormProps<"game">) {
                 payload: {
                   variant: "match",
                   pairs: [...payload.pairs, { left: "", right: "" }],
+                },
+              });
+            }}
+          />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Field label={t("editor.game.prompt")}>
+            <Input
+              aria-label={t("editor.game.prompt")}
+              onChange={(event) => {
+                onChange({
+                  ...block,
+                  payload: { ...payload, prompt: event.target.value },
+                });
+              }}
+              value={payload.prompt}
+            />
+          </Field>
+          <p className="text-xs font-medium">{t("editor.game.options")}</p>
+          {payload.options.map((option, index) => (
+            <div className="flex items-center gap-1.5" key={`option-${String(index)}`}>
+              <Input
+                aria-label={t("editor.game.optionAria", { index: index + 1 })}
+                onChange={(event) => {
+                  onChange({
+                    ...block,
+                    payload: {
+                      ...payload,
+                      options: payload.options.map((entry, position) =>
+                        position === index ? { ...entry, text: event.target.value } : entry,
+                      ),
+                    },
+                  });
+                }}
+                placeholder={t("editor.game.optionPlaceholder")}
+                value={option.text}
+              />
+              <label className="flex items-center gap-1 text-xs">
+                <input
+                  checked={option.correct}
+                  onChange={() => {
+                    onChange({
+                      ...block,
+                      payload: {
+                        ...payload,
+                        options: payload.options.map((entry, position) => ({
+                          ...entry,
+                          correct: position === index,
+                        })),
+                      },
+                    });
+                  }}
+                  type="radio"
+                />
+                {t("editor.game.correct")}
+              </label>
+              <IconButton
+                disabled={payload.options.length <= 2}
+                label={t("editor.game.optionRemove")}
+                onClick={() => {
+                  onChange({
+                    ...block,
+                    payload: {
+                      ...payload,
+                      options: payload.options.filter((_, position) => position !== index),
+                    },
+                  });
+                }}
+              >
+                <Trash2 aria-hidden="true" />
+              </IconButton>
+            </div>
+          ))}
+          <AddRow
+            label={t("editor.game.optionAdd")}
+            onClick={() => {
+              onChange({
+                ...block,
+                payload: {
+                  ...payload,
+                  options: [...payload.options, { text: "", correct: false }],
                 },
               });
             }}
@@ -1242,6 +1701,11 @@ function SimulationForm({ block, onChange }: FormProps<"simulation">) {
           },
         }),
       )}
+      <MotionDefaultsFields
+        legend="Motion defaults"
+        motion={payload.motion}
+        onChange={(motion) => emit({ ...payload, motion })}
+      />
       {ids.map((id) => {
         const node = payload.nodes[id];
         return (
@@ -1258,6 +1722,18 @@ function SimulationForm({ block, onChange }: FormProps<"simulation">) {
                 }
               />
             </Field>
+            <MotionDefaultsFields
+              legend="Motion overrides"
+              motion={node.motion}
+              onChange={(motion) => updateNode(id, { ...node, motion })}
+            />
+            <SupportingMediaFields
+              maxDurationSeconds={SIMULATION_MAX_ANIMATION_SECONDS}
+              media={node.supportingMedia}
+              onChange={(supportingMedia) =>
+                updateNode(id, { ...node, supportingMedia })
+              }
+            />
             {id === payload.end
               ? null
               : node.options.map((option, index) => {

@@ -207,3 +207,13 @@ describe("v2 programming submissions", () => {
     expect(await submitActivity("lesson", "b", { attemptId, answer: { program: solution, levelVersion: await courseProgrammingVersion(p) } })).toMatchObject({ ok: true, id: "winner-v2", grade: { completed: false, score: { raw: 0 } } });
   });
 });
+
+describe("upstream hint and replay compatibility", () => {
+  it.each(["hint", "replay"])("cannot bypass robot grading with a forged %s signal", async (kind) => {
+    const p = createParallelProgrammingPayload("parallel-lanes", "en"), game: Block = { id: "b", type: "game", title: "Robots", payload: p };
+    m.access.mockResolvedValue({ userId: "student", courseId: "course", block: game, blocks: [game], preview: false });
+    const result = await submitActivity("lesson", "b", { attemptId, answer: { program: [{ op: "left" }], levelVersion: await courseProgrammingVersion(p), kind }, feedback: { kind: "hint" } });
+    expect(result).toMatchObject({ ok: true, grade: { verification: "server", completed: false, score: { raw: 0 } } });
+    expect(m.persist.mock.calls[0][0].answer).not.toHaveProperty("kind");
+  });
+});

@@ -17,15 +17,15 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+type RegisterPageProps = {
+  searchParams: Promise<{ callbackUrl?: string | string[] }>;
+};
+
 /**
  * Reads the session cookie, so it is streamed behind a Suspense boundary under
  * Next's Cache Components model.
  */
-async function RegisterForm({
-  searchParams,
-}: {
-  searchParams: PageProps<"/register">["searchParams"];
-}) {
+async function RegisterForm({ searchParams }: RegisterPageProps) {
   // Auth.js draws random bytes; keep it out of the prerender pass.
   await connection();
   const session = await auth();
@@ -44,7 +44,7 @@ async function RegisterForm({
   );
 }
 
-export default function RegisterPage(props: PageProps<"/register">) {
+export default function RegisterPage(props: RegisterPageProps) {
   return (
     <main className="flex flex-1 items-center justify-center px-4 py-12">
       <Suspense fallback={<Skeleton className="h-96 w-full max-w-md rounded-xl" />}>

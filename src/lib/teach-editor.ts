@@ -1,6 +1,13 @@
 import { z } from "zod";
 
 import { blockListSchema, type Block } from "@/lib/blocks/schema";
+import {
+  gameActivityContainerSchema,
+  normalizeLessonGameActivity,
+  type GameActivityContainer,
+  validateGameActivity,
+} from "@/lib/game-activity";
+import type { ContentLanguage } from "@/lib/llm/language";
 
 /**
  * Shared model for the instructor course editor (P5.1).
@@ -63,6 +70,7 @@ export type EditorLesson = {
   title: string;
   estimatedMinutes: number;
   blocks: Block[];
+  gameActivity?: GameActivityContainer;
   /**
    * Blocks that are stored on the lesson but no longer match the schema. They
    * are left out of `blocks`, so saving replaces them; the editor warns before
@@ -86,6 +94,7 @@ export type EditorCourse = {
   audience: string;
   difficulty: string;
   coverEmoji: string;
+  language: ContentLanguage;
   status: EditorStatus;
   source: EditorSource;
   createdById: string;
@@ -105,6 +114,7 @@ export const editorLessonSchema = z.object({
     .max(120),
   estimatedMinutes: z.number().int().min(1).max(120),
   blocks: blockListSchema,
+  gameActivity: gameActivityContainerSchema.optional(),
 });
 
 export const editorModuleSchema = z.object({
@@ -139,6 +149,7 @@ export const editorCourseSchema = z
     audience: z.string().trim().min(1, "Say who the course is for.").max(80),
     difficulty: z.enum(EDITOR_DIFFICULTIES),
     coverEmoji: z.string().trim().min(1, "Pick a cover emoji.").max(8),
+    language: z.enum(["en", "zh"]).default("en"),
     status: z.enum(EDITOR_STATUSES),
     modules: z.array(editorModuleSchema).min(1, "A course needs a module."),
   })
@@ -147,7 +158,10 @@ export const editorCourseSchema = z
       (total, courseModule) =>
         total
         + courseModule.lessons.reduce(
-          (lessonTotal, lesson) => lessonTotal + lesson.blocks.length,
+          (lessonTotal, lesson) =>
+            lessonTotal
+            + lesson.blocks.length
+            + (lesson.gameActivity?.challenges.length ?? 0),
           0,
         ),
       0,
@@ -160,6 +174,60 @@ export const editorCourseSchema = z
         message: "Add at least one block before publishing this course.",
       });
     }
+
+    if (course.status === "PUBLISHED") {
+      for (const [moduleIndex, courseModule] of course.modules.entries()) {
+        for (const [lessonIndex, lesson] of courseModule.lessons.entries()) {
+          const normalized = normalizeLessonGameActivity({
+            lessonId: lesson.id,
+            lessonTitle: lesson.title,
+            blocks: lesson.blocks,
+            gameActivity: lesson.gameActivity,
+          });
+          const leftoverGames = normalized.blocks.filter(
+            (block) => block.type === "game" && block.payload.variant !== "programming",
+          );
+          if (leftoverGames.length > 0) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["modules", moduleIndex, "lessons", lessonIndex, "blocks"],
+              message:
+                "Move Game Challenges into one Game Activity before publishing.",
+            });
+          }
+          const activity = normalized.gameActivity;
+          if (activity === undefined) continue;
+          const result = validateGameActivity(activity, course.language);
+          if (!result.ok) {
+            const activityPath: PropertyKey[] = [
+              "modules",
+              moduleIndex,
+              "lessons",
+              lessonIndex,
+              "gameActivity",
+            ];
+            ctx.addIssue({
+              code: "custom",
+              path: activityPath,
+              message: result.errors.join(" "),
+            });
+            for (const error of result.errors) {
+              const challengeNumber = /^Challenge (\d+)/u.exec(error)?.[1];
+              if (challengeNumber === undefined) continue;
+              ctx.addIssue({
+                code: "custom",
+                path: [
+                  ...activityPath,
+                  "challenges",
+                  Number(challengeNumber) - 1,
+                ],
+                message: error,
+              });
+            }
+          }
+        }
+      }
+    }
   });
 
-export type EditorCourseInput = z.infer<typeof editorCourseSchema>;
+export type EditorCourseInput = z.input<typeof editorCourseSchema>;

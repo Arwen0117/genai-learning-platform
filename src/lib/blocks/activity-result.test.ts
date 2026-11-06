@@ -64,6 +64,37 @@ describe("activity grades", () => {
       },
     ]);
   });
+
+  it("ignores simulation motion and supporting media when grading", () => {
+    const withMotion = blockSchema.parse({
+      ...sim,
+      payload: {
+        ...sim.payload,
+        motion: { nodeEnter: "fade-up", summaryEnter: "summary-rise" },
+        nodes: {
+          ...sim.payload.nodes,
+          start: {
+            ...sim.payload.nodes.start,
+            motion: { feedbackReveal: "slide-feedback" },
+            supportingMedia: {
+              kind: "image",
+              url: "/media/start.png",
+              approvalStatus: "approved",
+              moderationStatus: "passed",
+              provenance: { source: "instructor-provided" },
+              decorative: true,
+            },
+          },
+        },
+      },
+    });
+    const grade = gradeActivity(withMotion, {
+      choices: [{ nodeId: "start", optionIndex: 0 }],
+    });
+    expect(grade.score?.normalized).toBe(1);
+    expect(grade.completed).toBe(true);
+    expect(grade.passed).toBe(true);
+  });
   it("rejects skipped nodes and choices after the end", () => {
     expect(() =>
       gradeActivity(sim, { choices: [{ nodeId: "loop", optionIndex: 0 }] }),
@@ -85,7 +116,11 @@ describe("activity grades", () => {
   });
   it("grades non-contiguous sort orders and rejects duplicate ids", () => {
     expect(gradeActivity(game, { order: [1, 0] }).score?.normalized).toBe(1);
-    expect(gradeActivity(game, { order: [0, 1] }).completed).toBe(false);
+    expect(gradeActivity(game, { order: [0, 1] })).toMatchObject({
+      completed: true,
+      passed: false,
+      feedback: { correction: { expected: [1, 0] } },
+    });
     expect(() => gradeActivity(game, { order: [0, 0] })).toThrow();
   });
   it("does not count repeated matching pairs as distinct answers", () => {
@@ -107,8 +142,35 @@ describe("activity grades", () => {
           { left: 0, right: 0 },
           { left: 0, right: 0 },
         ],
-      }).completed,
-    ).toBe(false);
+      }),
+    ).toMatchObject({ completed: true, passed: false });
+  });
+  it("grades a choose challenge from the saved correct option", () => {
+    const block: Block = {
+      id: "c",
+      title: "Choose",
+      type: "game",
+      payload: {
+        variant: "choose",
+        prompt: "Which is safest?",
+        options: [
+          { text: "Distractor", correct: false },
+          { text: "Correct", correct: true },
+        ],
+      },
+    };
+    expect(gradeActivity(block, { option: 0 })).toMatchObject({
+      completed: true,
+      passed: false,
+      feedback: { correction: { answer: "Correct" } },
+    });
+    expect(gradeActivity(block, { option: 1 })).toMatchObject({
+      completed: true,
+      passed: true,
+      score: null,
+      verification: "server",
+    });
+    expect(() => gradeActivity(block, { option: 3 })).toThrow();
   });
   it("labels browser coding tests as unverified and rejects stale test sets", () => {
     const block: Block = {

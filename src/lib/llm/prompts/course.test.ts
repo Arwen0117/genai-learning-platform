@@ -14,7 +14,7 @@ describe("learnerCoursePrompt", () => {
 
     expect(prompt).toContain("K-pop fandom economics");
     expect(prompt).toContain("Why fans buy merch");
-    expect(prompt).toContain("exactly one module of three lessons");
+    expect(prompt).toContain("Game Activity container");
   });
 
   it("says when no goal was given", () => {
@@ -22,6 +22,7 @@ describe("learnerCoursePrompt", () => {
       "No specific goal was given",
     );
   });
+
 });
 
 describe("mockLearnerCourse", () => {
@@ -30,13 +31,13 @@ describe("mockLearnerCourse", () => {
     expect(course.lessons).toHaveLength(3);
   });
 
-  it("gives every lesson a reading, an interactive block and a quiz", () => {
+  it("gives every lesson reading, quiz, and a Game Activity container", () => {
     for (const lesson of course.lessons) {
       const types = lesson.blocks.map((block) => block.type);
-      expect(types).toHaveLength(3);
+      expect(types).toHaveLength(2);
       expect(types[0]).toBe("reading");
-      expect(types[2]).toBe("quiz");
-      expect(["flashcards", "game"]).toContain(types[1]);
+      expect(types[1]).toBe("quiz");
+      expect(lesson.gameActivity.challenges).toHaveLength(5);
     }
   });
 
@@ -56,12 +57,12 @@ describe("mockLearnerCourse", () => {
     expect(new Set(questionIds).size).toBe(questionIds.length);
   });
 
-  it("rejects a lesson that is missing its interactive block", () => {
+  it("rejects a lesson that is missing its Game Activity blocks", () => {
     const first = course.lessons[0];
     const invalid = {
       ...course,
       lessons: [
-        { ...first, blocks: [first.blocks[0], first.blocks[2]] },
+        { ...first, blocks: [first.blocks[0]] },
         course.lessons[1],
         course.lessons[2],
       ],

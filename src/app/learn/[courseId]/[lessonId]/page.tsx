@@ -30,6 +30,8 @@ import { trackEvent } from "@/lib/analytics";
 import { auth } from "@/lib/auth";
 import { applyBlockOverrides } from "@/lib/blocks/override";
 import { blockListSchema } from "@/lib/blocks/schema";
+import { gameActivityContainerSchema } from "@/lib/game-activity";
+import { getGameActivityProgress } from "@/lib/game-activity-progression";
 import {
   flattenLessons,
   getCourseById,
@@ -147,7 +149,7 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
 
   const lessonRow = await prisma.lesson.findUnique({
     where: { id: lessonId },
-    select: { blocks: true },
+    select: { blocks: true, gameActivity: true },
   });
 
   // Per-learner rewrites (P4.4) are merged in at read time, so the stored lesson
@@ -162,10 +164,23 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
   const overriddenBlockIds = new Set(overrideRows.map((row) => row.blockId));
 
   const parsedBlocks = blockListSchema.safeParse(lessonRow?.blocks);
-  const blocks = applyBlockOverrides(
+  const rawBlocks = applyBlockOverrides(
     parsedBlocks.success ? parsedBlocks.data : [],
     overrideRows,
   );
+  const parsedGameActivity = gameActivityContainerSchema.safeParse(
+    lessonRow?.gameActivity,
+  );
+  const gameActivity = parsedGameActivity.success
+    ? parsedGameActivity.data
+    : null;
+  // Challenges render inside the Game Activity boundary, not as standalone blocks.
+  const blocks =
+    gameActivity === null
+      ? rawBlocks
+      : rawBlocks.filter((block) => block.type !== "game" || block.payload.variant === "programming");
+  const activityChallenges = gameActivity?.challenges ?? [];
+  const learnerActivities = [...blocks, ...activityChallenges];
 
   // Preview is invisible to analytics: otherwise every teacher preview would
   // look like a learner starting the lesson.
@@ -194,15 +209,26 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
   const next = lessons[index + 1];
 
   const completedBlocks = progress.get(lessonId)?.completedBlocks ?? [];
+  const gameActivityProgress = gameActivity
+    ? getGameActivityProgress(gameActivity, completedBlocks)
+    : null;
   const allBlocksDone =
-    blocks.length > 0 && blocks.every((block) => completedBlocks.includes(block.id));
+    learnerActivities.length > 0 &&
+    blocks.every((block) => completedBlocks.includes(block.id)) &&
+    (gameActivityProgress === null || gameActivityProgress.completed);
   const courseCompleted =
     !canPreview &&
     (enrollment?.completedAt != null ||
       lessons.every((entry) => progress.get(entry.id)?.status === "COMPLETED"));
 
   const lessonRatio =
-    blocks.length === 0 ? 0 : (completedBlocks.length / blocks.length) * 100;
+    learnerActivities.length === 0
+      ? 0
+      : (completedBlocks.filter((id) =>
+          learnerActivities.some((block) => block.id === id),
+        ).length /
+          learnerActivities.length) *
+        100;
 
   // Conversation shown when the tutor drawer opens (P4.3): the last messages of
   // this lesson's session, or an empty list until the learner asks something.
@@ -274,8 +300,10 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
             </Badge>
             <Badge variant="outline">
               {t("lesson.blocks", {
-                completed: completedBlocks.length,
-                total: blocks.length,
+                completed: completedBlocks.filter((id) =>
+                  learnerActivities.some((block) => block.id === id),
+                ).length,
+                total: learnerActivities.length,
               })}
             </Badge>
             {course.repoUrl !== null ? (
@@ -315,6 +343,50 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
               preview={canPreview}
             />
           ))}
+          {gameActivity ? (
+            <section
+              aria-labelledby={`${gameActivity.id}-title`}
+              className="space-y-4 rounded-xl border border-primary/20 p-4"
+            >
+              <header>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary">
+                  {t("lesson.gameActivity.label")}
+                </p>
+                <h2
+                  className="mt-1 text-lg font-semibold"
+                  id={`${gameActivity.id}-title`}
+                >
+                  {gameActivity.title}
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {gameActivityProgress?.completed
+                    ? t("lesson.gameActivity.complete")
+                    : t("lesson.gameActivity.progress", {
+                        current:
+                          (gameActivityProgress?.nextChallengeIndex ?? 0) + 1,
+                        total: gameActivity.challenges.length,
+                      })}
+                </p>
+              </header>
+              <div className="space-y-4">
+                {activityChallenges.map((block) => (
+                  <BlockRenderer
+                    block={block}
+                    completed={completedBlocks.includes(block.id)}
+                    courseId={courseId}
+                    key={block.id}
+                    locked={
+                      !canPreview &&
+                      gameActivityProgress?.nextChallenge !== null &&
+                      gameActivityProgress?.nextChallenge?.id !== block.id
+                    }
+                    lessonId={lessonId}
+                    preview={canPreview}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
 
         {allBlocksDone ? (

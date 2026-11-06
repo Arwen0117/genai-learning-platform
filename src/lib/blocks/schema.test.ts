@@ -193,6 +193,34 @@ const validRoleplay = {
 };
 
 describe("blockSchema", () => {
+  it("requires exactly one correct option in choose games", () => {
+    const base = {
+      id: "choose",
+      title: "Choose",
+      type: "game" as const,
+      payload: {
+        variant: "choose" as const,
+        prompt: "Pick one",
+        options: [
+          { text: "A", correct: true },
+          { text: "B", correct: false },
+        ],
+      },
+    };
+    expect(blockSchema.safeParse(base).success).toBe(true);
+    expect(
+      blockSchema.safeParse({
+        ...base,
+        payload: {
+          ...base.payload,
+          options: base.payload.options.map((option) => ({
+            ...option,
+            correct: true,
+          })),
+        },
+      }).success,
+    ).toBe(false);
+  });
   it("accepts a reading block without an image", () => {
     expect(blockSchema.safeParse(validReading).success).toBe(true);
   });
@@ -511,6 +539,76 @@ describe("blockSchema", () => {
     const result = blockSchema.safeParse({
       ...validSimulation,
       payload: { ...validSimulation.payload, nodes },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts simulation motion defaults and node supporting media", () => {
+    const result = blockSchema.safeParse({
+      ...validSimulation,
+      payload: {
+        ...validSimulation.payload,
+        motion: {
+          nodeEnter: "fade-up",
+          feedbackReveal: "slide-feedback",
+        },
+        nodes: {
+          ...validSimulation.payload.nodes,
+          triage: {
+            ...validSimulation.payload.nodes.triage,
+            motion: { nodeEnter: "emphasis-pulse" },
+            supportingMedia: {
+              kind: "animation",
+              url: "/media/scene.mp4",
+              approvalStatus: "approved",
+              moderationStatus: "passed",
+              provenance: { source: "instructor-provided" },
+              altText: "Scene animation",
+              decorative: false,
+              durationSeconds: 10,
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unknown simulation motion pattern ids", () => {
+    const result = blockSchema.safeParse({
+      ...validSimulation,
+      payload: {
+        ...validSimulation.payload,
+        motion: { nodeEnter: "spin-forever" },
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects simulation animation supporting media over ten seconds", () => {
+    const result = blockSchema.safeParse({
+      ...validSimulation,
+      payload: {
+        ...validSimulation.payload,
+        nodes: {
+          ...validSimulation.payload.nodes,
+          triage: {
+            ...validSimulation.payload.nodes.triage,
+            supportingMedia: {
+              kind: "animation",
+              url: "/media/scene.mp4",
+              approvalStatus: "approved",
+              moderationStatus: "passed",
+              provenance: { source: "instructor-provided" },
+              decorative: true,
+              durationSeconds: 10.1,
+            },
+          },
+        },
+      },
     });
 
     expect(result.success).toBe(false);

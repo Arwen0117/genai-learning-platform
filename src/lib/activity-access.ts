@@ -1,6 +1,26 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { blockSchema, type Block } from "@/lib/blocks/schema";
+import { gameActivityContainerSchema } from "@/lib/game-activity";
+import { getGameActivityProgress } from "@/lib/game-activity-progression";
+
+function storedBlocks(lesson: {
+  blocks: unknown;
+  gameActivity?: unknown;
+}): Block[] {
+  const blocks = Array.isArray(lesson.blocks)
+    ? lesson.blocks
+        .map((b) => blockSchema.safeParse(b))
+        .flatMap((p) => (p.success ? [p.data] : []))
+    : [];
+  const activity = gameActivityContainerSchema.safeParse(lesson.gameActivity);
+  if (!activity.success) return blocks;
+  // Challenges live only in the Game Activity container once it exists.
+  return [
+    ...blocks.filter((block) => block.type !== "game" || block.payload.variant === "programming"),
+    ...activity.data.challenges,
+  ];
+}
 
 /**
  * Resolves access to one block of a lesson.
@@ -36,6 +56,8 @@ export async function activityAccess(
         courseId: undefined,
         block,
         blocks: [block],
+        activityBlocks: undefined,
+        activityId: undefined,
         preview: true,
       };
     }
@@ -57,19 +79,26 @@ export async function activityAccess(
     )
       throw new Error("You can only preview your own draft courses.");
 
-    const blocks = Array.isArray(lesson.blocks)
-      ? lesson.blocks
-          .map((b) => blockSchema.safeParse(b))
-          .flatMap((p) => (p.success ? [p.data] : []))
-      : [];
+    const blocks = storedBlocks(lesson);
     const block = blocks.find((b) => b.id === blockId);
     if (!block) throw new Error("Activity not found.");
+    const activity = gameActivityContainerSchema.safeParse(lesson.gameActivity);
+    const activityId =
+      activity.success &&
+      activity.data.challenges.some((challenge) => challenge.id === blockId)
+        ? activity.data.id
+        : undefined;
+    const activityBlocks = activity.success
+      ? activity.data.challenges
+      : undefined;
 
     return {
       userId: user.id,
       courseId: course.id,
       block,
       blocks,
+      activityBlocks,
+      activityId,
       preview: true,
     };
   }
@@ -87,18 +116,46 @@ export async function activityAccess(
     throw new Error(
       "Use teacher preview, or enroll as a learner in a published course.",
     );
-  const blocks = Array.isArray(lesson.blocks)
-    ? lesson.blocks
-        .map((b) => blockSchema.safeParse(b))
-        .flatMap((p) => (p.success ? [p.data] : []))
-    : [];
+  const blocks = storedBlocks(lesson);
   const block = blocks.find((b) => b.id === blockId);
   if (!block) throw new Error("Activity not found.");
+  const activity = gameActivityContainerSchema.safeParse(lesson.gameActivity);
+  const activityId =
+    activity.success &&
+    activity.data.challenges.some((challenge) => challenge.id === blockId)
+      ? activity.data.id
+      : undefined;
+  const activityBlocks = activity.success
+      ? activity.data.challenges
+      : undefined;
+  if (activity.success && activity.data.challenges.some((b) => b.id === blockId)) {
+    const progress = await prisma.lessonProgress.findUnique({
+      where: { userId_lessonId: { userId: user.id, lessonId } },
+      select: { completedBlocks: true },
+    });
+    const completedIds = Array.isArray(progress?.completedBlocks)
+      ? progress.completedBlocks.filter(
+          (value): value is string => typeof value === "string",
+        )
+      : [];
+    const activityProgress = getGameActivityProgress(
+      activity.data,
+      completedIds,
+    );
+    if (
+      activityProgress.nextChallenge !== null &&
+      activityProgress.nextChallenge.id !== blockId
+    ) {
+      throw new Error("Complete Game Activity Challenges in order.");
+    }
+  }
   return {
     userId: user.id,
     courseId: course.id,
     block,
     blocks,
+    activityBlocks,
+    activityId,
     preview: false,
   };
 }

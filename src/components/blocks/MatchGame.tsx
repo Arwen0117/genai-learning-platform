@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useT } from "@/i18n/client";
 import type { MatchPair } from "@/lib/blocks/schema";
 import { cn } from "@/lib/utils";
+import type { GameRecovery } from "./GameBlock";
+import { isGameSubmission } from "./game-recovery";
 
 /**
  * Match game: connect each item on the left with its partner on the right.
@@ -44,6 +46,9 @@ export type MatchGameProps = {
   onComplete: () => void;
   /** Raised once per run so the page can record the finish event. */
   onFinish: (payload: Record<string, unknown>) => void;
+  feedback?: { correct: string; incorrect: string };
+  hint?: string;
+  recovery?: GameRecovery;
 };
 
 const CARD_BASE =
@@ -58,6 +63,9 @@ export function MatchGame({
   completed,
   onComplete,
   onFinish,
+  feedback: generatedFeedback,
+  hint: generatedHint,
+  recovery,
 }: MatchGameProps) {
   /** Indices of the right-hand column, in the order they are displayed. */
   const rightOrder = useMemo(
@@ -80,6 +88,53 @@ export function MatchGame({
   const [attempts, setAttempts] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [solved, setSolved] = useState(false);
+  const [hintsUsed, setHintsUsed] = useState(0);
+  const [hint, setHint] = useState<string | null>(null);
+  const [playthrough, setPlaythrough] = useState(1);
+  const playthroughId = useRef(crypto.randomUUID());
+  const progressReported = useRef(completed);
+
+  useEffect(() => {
+    const attempts = recovery?.attempts ?? [];
+    if (typeof recovery?.playthroughId === "string")
+      playthroughId.current = recovery.playthroughId;
+    if (attempts.length === 0) return;
+    const submissions = attempts.filter((attempt) => isGameSubmission(attempt.answer));
+    const latest = submissions.at(-1);
+    if (!latest) return;
+    const answer = latest.answer;
+    if (Array.isArray(answer.choices)) {
+      const choices = answer.choices.filter(
+        (choice): choice is { left: number; right: number } =>
+          typeof choice === "object" &&
+          choice !== null &&
+          typeof choice.left === "number" &&
+          typeof choice.right === "number",
+      );
+      queueMicrotask(() => {
+        setMatched([
+          ...new Set(
+            choices
+              .filter((choice) => choice.left === choice.right)
+              .map((choice) => choice.left),
+          ),
+        ]);
+        choicesRef.current = choices;
+      });
+    }
+    queueMicrotask(() => {
+      setAttempts(
+        typeof answer.attempts === "number" ? answer.attempts : submissions.length,
+      );
+      setHintsUsed(
+        attempts.filter((attempt) => attempt.answer.kind === "hint").length,
+      );
+      setSolved(latest.completed);
+      if (typeof answer.playthrough === "number") setPlaythrough(answer.playthrough);
+      if (typeof answer.playthroughId === "string")
+        playthroughId.current = answer.playthroughId;
+    });
+  }, [recovery]);
 
   const resetTimerRef = useRef<number | null>(null);
 
@@ -110,11 +165,6 @@ export function MatchGame({
       return;
     }
 
-    // Ignore further picks while the previous miss is still shaking.
-    if (resetTimerRef.current !== null) {
-      return;
-    }
-
     const taken = attempts + 1;
     setAttempts(taken);
     choicesRef.current.push({ left: pickedLeft, right: index });
@@ -122,6 +172,10 @@ export function MatchGame({
       variant: "match",
       attempts: taken,
       choices: [...choicesRef.current],
+      hintsUsed,
+      submission: taken === 1 ? "first" : "retry",
+      playthrough,
+      playthroughId: playthroughId.current,
     });
 
     if (pickedLeft === index) {
@@ -133,19 +187,49 @@ export function MatchGame({
       if (nextMatched.length === pairs.length) {
         setSolved(true);
         setNotice(
-          t("block.match.solved", { count: pairs.length, attempts: taken }),
+          generatedFeedback?.correct ??
+            t("block.match.solved", { count: pairs.length, attempts: taken }),
         );
+        if (!progressReported.current) {
+          progressReported.current = true;
+          onComplete();
+        }
       }
       return;
     }
 
     setWrongRight(index);
-    setNotice(t("block.match.wrong"));
+    setNotice(
+      generatedFeedback?.incorrect ??
+        t("block.match.correction", {
+          left: pairs[pickedLeft].left,
+          right: pairs[pickedLeft].right,
+        }),
+    );
+    setPickedLeft(null);
+    // An incorrect pair still marks the Challenge attempted/complete.
+    if (!progressReported.current) {
+      progressReported.current = true;
+      onComplete();
+    }
     resetTimerRef.current = window.setTimeout(() => {
       resetTimerRef.current = null;
       setWrongRight(null);
-      setPickedLeft(null);
     }, WRONG_PAIR_DELAY_MS);
+  }
+
+  function showHint(): void {
+    const next = pairs.find((_, index) => !matched.includes(index));
+    if (!next) return;
+    setHintsUsed((count) => count + 1);
+    onFinish({
+      kind: "hint",
+      playthrough,
+      playthroughId: playthroughId.current,
+    });
+    setHint(
+      generatedHint ?? t("block.match.hint", { left: next.left, right: next.right }),
+    );
   }
 
   function startOver(): void {
@@ -160,6 +244,13 @@ export function MatchGame({
     setAttempts(0);
     setNotice(null);
     setSolved(false);
+    setHintsUsed(0);
+    setHint(null);
+    progressReported.current = false;
+    const nextPlaythroughId = crypto.randomUUID();
+    setPlaythrough((run) => run + 1);
+    playthroughId.current = nextPlaythroughId;
+    onFinish({ kind: "replay", playthroughId: nextPlaythroughId });
   }
 
   return (
@@ -167,6 +258,22 @@ export function MatchGame({
       <p className="text-xs text-muted-foreground">
         {t("block.match.instruction")}
       </p>
+      <div
+        aria-label={t("block.match.progress", {
+          current: matched.length,
+          total: pairs.length,
+        })}
+        aria-valuemax={pairs.length}
+        aria-valuemin={0}
+        aria-valuenow={matched.length}
+        className="h-1.5 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+      >
+        <div
+          className="h-full bg-primary transition-[width]"
+          style={{ width: `${(matched.length / pairs.length) * 100}%` }}
+        />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <ul className="space-y-2">
@@ -242,9 +349,12 @@ export function MatchGame({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <Button disabled={solved} onClick={showHint} variant="ghost">
+          {t("common.hint")}
+        </Button>
         <Button onClick={startOver} variant="outline">
           <RotateCcw aria-hidden="true" />
-          {t("common.startOver")}
+          {attempts > 0 ? t("common.replay") : t("common.startOver")}
         </Button>
         <span className="ml-auto text-xs text-muted-foreground tabular-nums">
           {t("block.match.attempts", {
@@ -261,14 +371,24 @@ export function MatchGame({
             "text-xs",
             solved ? "text-emerald-600" : "text-muted-foreground",
           )}
+          role="status"
         >
           {notice}
+        </p>
+      )}
+      {hint === null ? null : (
+        <p
+          aria-live="polite"
+          className="text-xs text-muted-foreground"
+          role="status"
+        >
+          {hint}
         </p>
       )}
 
       <div className="flex flex-wrap items-center gap-3 border-t pt-4">
         <Button
-          disabled={!solved || completed}
+          disabled={attempts === 0 || completed}
           onClick={onComplete}
           variant={completed ? "secondary" : "default"}
         >
@@ -282,7 +402,9 @@ export function MatchGame({
           )}
         </Button>
         <p className="text-xs text-muted-foreground">
-          {solved || completed ? t("block.match.done") : t("block.match.need")}
+          {attempts > 0 || completed
+            ? t("block.match.done")
+            : t("block.match.need")}
         </p>
       </div>
     </div>

@@ -48,9 +48,11 @@ model User {
   lessonProgress LessonProgress[]
   events         EngagementEvent[]
   createdCourses Course[]         @relation("CourseCreator")
+  createdInvitations Invitation[] @relation("InvitationCreator")
   tutorSessions  TutorSession[]
   blockOverrides UserBlockOverride[]
   activityAttempts ActivityAttempt[]
+  playthroughs Playthrough[]
 }
 
 model Course {
@@ -71,6 +73,7 @@ model Course {
   createdBy   User         @relation("CourseCreator", fields: [createdById], references: [id])
   modules     Module[]
   enrollments Enrollment[]
+  invitations Invitation[]
   events      EngagementEvent[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -105,8 +108,28 @@ model Lesson {
   order            Int
   estimatedMinutes Int              @default(10)
   blocks           Json
+  gameActivity     Json?
   progress         LessonProgress[]
   activityAttempts ActivityAttempt[]
+  playthroughs     Playthrough[]
+  gameActivityVersions GameActivityVersion[]
+}
+
+/// Immutable published snapshot of one Game Activity. Playthroughs bind to the
+/// version that was live when the run started so later edits cannot rewrite history.
+model GameActivityVersion {
+  id          String   @id @default(cuid())
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  activityId  String
+  version     Int
+  contentHash String
+  snapshot    Json
+  createdAt   DateTime @default(now())
+  playthroughs Playthrough[]
+
+  @@unique([lessonId, activityId, version])
+  @@index([lessonId, activityId, createdAt])
 }
 
 model Enrollment {
@@ -118,6 +141,21 @@ model Enrollment {
   createdAt   DateTime  @default(now())
   completedAt DateTime?
   @@unique([userId, courseId])
+}
+
+/// Open multi-use Course Invitation (ADR 0001). Safety is optional expiry + revoke.
+model Invitation {
+  id          String    @id @default(cuid())
+  token       String    @unique
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User      @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+
+  @@index([courseId])
 }
 
 model LessonProgress {
@@ -199,10 +237,34 @@ model ActivityAttempt {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   lessonId  String
   lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  playthroughId String?
+  playthrough Playthrough? @relation(fields: [playthroughId], references: [id], onDelete: SetNull)
   blockId   String
   blockType String
   result    Json
   createdAt DateTime @default(now())
   @@unique([userId, lessonId, blockId, attemptId])
   @@index([userId, lessonId, blockId, createdAt])
+}
+
+model Playthrough {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId            String
+  lesson              Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  activityId          String
+  publishedVersionId  String?
+  publishedVersion    GameActivityVersion? @relation(fields: [publishedVersionId], references: [id], onDelete: SetNull)
+  contentHash         String?
+  clientCorrelationId String?
+  status              String   @default("IN_PROGRESS")
+  completedAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  attempts            ActivityAttempt[]
+
+  @@index([userId, lessonId, activityId, createdAt])
+  @@index([userId, lessonId, activityId, status])
+  @@index([publishedVersionId])
 }

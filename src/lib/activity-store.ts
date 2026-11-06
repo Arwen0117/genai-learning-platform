@@ -1,7 +1,50 @@
 import { Prisma } from "@prisma/client";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { Block } from "@/lib/blocks/schema";
 import type { ActivityGrade } from "@/lib/blocks/activity-result";
+import { gameActivityContainerSchema } from "@/lib/game-activity";
+
+export function contentVersionForBlock(block: Block): string {
+  return createHash("sha256")
+    .update(JSON.stringify(block))
+    .digest("hex")
+    .slice(0, 16);
+}
+
+function isSubstantiveAttempt(row: { result: unknown }): boolean {
+  const previous = row.result as {
+    answer?: { kind?: unknown };
+    attempted?: unknown;
+  };
+  if (typeof previous.attempted === "boolean") return previous.attempted;
+  return previous.answer?.kind !== "hint" && previous.answer?.kind !== "replay";
+}
+
+type PlaythroughClient = {
+  findFirst: (args: unknown) => Promise<{
+    id: string;
+    publishedVersionId?: string | null;
+  } | null>;
+  create: (args: unknown) => Promise<{
+    id: string;
+    publishedVersionId?: string | null;
+  }>;
+  update: (args: unknown) => Promise<unknown>;
+};
+
+type VersionClient = {
+  findFirst: (args: unknown) => Promise<{
+    id: string;
+    contentHash: string;
+    snapshot: unknown;
+  } | null>;
+  findUnique: (args: unknown) => Promise<{
+    id: string;
+    contentHash: string;
+    snapshot: unknown;
+  } | null>;
+};
 
 export async function persistActivity(input: {
   userId: string;
@@ -9,6 +52,8 @@ export async function persistActivity(input: {
   lessonId: string;
   block: Block;
   blocks: Block[];
+  activityBlocks?: Block[];
+  activityId?: string;
   attemptId: string;
   answer: Record<string, unknown>;
   grade: ActivityGrade;
@@ -19,21 +64,13 @@ export async function persistActivity(input: {
     lessonId,
     block,
     blocks,
+    activityBlocks,
+    activityId,
     attemptId,
     answer,
     grade,
   } = input;
-  const result = {
-    version: 1,
-    attemptId,
-    activityType: block.type,
-    blockId: block.id,
-    lessonId,
-    courseId,
-    answer,
-    ...grade,
-    activitySnapshot: block,
-  };
+  const contentVersion = contentVersionForBlock(block);
   // Serializable + bounded retry prevents parallel blocks overwriting completedBlocks.
   for (let retry = 0; ; retry++) {
     try {
@@ -44,10 +81,113 @@ export async function persistActivity(input: {
             where: { userId_lessonId_blockId_attemptId: key },
           });
           if (existing) return existing;
+          const clientPlaythroughId =
+            typeof answer.playthroughId === "string" &&
+            answer.playthroughId.length > 0
+              ? answer.playthroughId
+              : null;
+          const playthroughClient = (tx as { playthrough?: PlaythroughClient })
+            .playthrough;
+          const versionClient = (
+            tx as { gameActivityVersion?: VersionClient }
+          ).gameActivityVersion;
+          const latestPublishedVersion =
+            activityId === undefined || versionClient === undefined
+              ? null
+              : await versionClient.findFirst({
+                  where: { lessonId, activityId },
+                  orderBy: [{ version: "desc" }, { id: "desc" }],
+                  select: { id: true, contentHash: true, snapshot: true },
+                });
+          const isReplay = answer.kind === "replay";
+          const playthroughData = {
+            userId,
+            lessonId,
+            activityId,
+            clientCorrelationId: clientPlaythroughId,
+            publishedVersionId: latestPublishedVersion?.id ?? null,
+            contentHash: latestPublishedVersion?.contentHash ?? null,
+          };
+          const playthrough =
+            activityId === undefined || playthroughClient === undefined
+              ? null
+              : isReplay
+                ? await playthroughClient.create({
+                    data: playthroughData,
+                  })
+                : ((await playthroughClient.findFirst({
+                    where: {
+                      userId,
+                      lessonId,
+                      activityId,
+                      status: "IN_PROGRESS",
+                      ...(latestPublishedVersion?.contentHash
+                        ? { contentHash: latestPublishedVersion.contentHash }
+                        : {}),
+                    },
+                    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+                    select: { id: true, publishedVersionId: true },
+                  })) ??
+                  (await playthroughClient.create({
+                    data: playthroughData,
+                  })));
+          const boundVersion =
+            playthrough === null || versionClient === undefined
+              ? latestPublishedVersion
+              : playthrough.publishedVersionId
+                ? ((await versionClient.findUnique({
+                    where: { id: playthrough.publishedVersionId },
+                    select: { id: true, contentHash: true, snapshot: true },
+                  })) ?? latestPublishedVersion)
+                : latestPublishedVersion;
+          const versionSnapshot = gameActivityContainerSchema.safeParse(
+            boundVersion?.snapshot,
+          );
+          const versionChallengeBlocks = versionSnapshot.success
+            ? versionSnapshot.data.challenges
+            : activityBlocks;
+          const previousAttempts = await tx.activityAttempt.findMany({
+            where: { userId, lessonId, blockId: block.id },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          });
+          const playthroughId = playthrough?.id ?? clientPlaythroughId;
+          const priorPlaythroughAttempts = previousAttempts.filter((row) => {
+            const previous = row.result as {
+              playthroughId?: unknown;
+              contentVersion?: unknown;
+            };
+            return (
+              previous.contentVersion === contentVersion &&
+              previous.playthroughId === playthroughId
+            );
+          });
+          const isProgramming = block.type === "game" && block.payload.variant === "programming";
+          const isSignal = !isProgramming && (answer.kind === "hint" || answer.kind === "replay" || grade.feedback.kind === "hint");
+          const attempted = !isSignal;
+          const result = {
+            version: 1,
+            attemptId,
+            activityType: block.type,
+            blockId: block.id,
+            lessonId,
+            courseId,
+            activityId: activityId ?? null,
+            contentVersion,
+            playthroughId,
+            attemptNumber: priorPlaythroughAttempts.length + 1,
+            attempted,
+            firstPass: !isSignal && !priorPlaythroughAttempts.some(isSubstantiveAttempt),
+            answer,
+            ...grade,
+            activitySnapshot: block,
+          };
           const attempt = await tx.activityAttempt.create({
             data: {
               ...key,
               blockType: block.type,
+              ...(playthrough === null
+                ? {}
+                : { playthroughId: playthrough.id }),
               result: JSON.parse(
                 JSON.stringify(result),
               ) as Prisma.InputJsonValue,
@@ -65,6 +205,43 @@ export async function persistActivity(input: {
           );
           const wasCompleted = completedBlocks.has(block.id);
           if (grade.completed) completedBlocks.add(block.id);
+          const playthroughChallenges = versionChallengeBlocks ?? activityBlocks;
+          const playthroughCompletedBlocks = new Set(
+            (playthroughChallenges === undefined
+              ? previousAttempts
+              : await tx.activityAttempt.findMany({
+                  where: {
+                    userId,
+                    lessonId,
+                    blockId: {
+                      in: playthroughChallenges.map((item) => item.id),
+                    },
+                  },
+                })
+            )
+              .filter((row) => {
+                const result = row.result as {
+                  playthroughId?: unknown;
+                  completed?: unknown;
+                  contentVersion?: unknown;
+                };
+                return (
+                  result.playthroughId === playthrough?.id &&
+                  result.completed === true &&
+                  playthroughChallenges?.some(
+                    (item) =>
+                      item.id === row.blockId &&
+                      result.contentVersion === contentVersionForBlock(item),
+                  )
+                );
+              })
+              .map((row) => row.blockId),
+          );
+          if (grade.completed) playthroughCompletedBlocks.add(block.id);
+          const activityDone =
+            playthroughChallenges?.every((b) =>
+              playthroughCompletedBlocks.has(b.id),
+            ) ?? false;
           const allDone = blocks.every((b) => completedBlocks.has(b.id));
           const attempts = await tx.activityAttempt.findMany({
             where: { userId, lessonId },
@@ -111,9 +288,15 @@ export async function persistActivity(input: {
             lessonId,
             blockId: block.id,
             activityType: block.type,
+            activityId: activityId ?? null,
             score: grade.score?.normalized ?? null,
             completed: grade.completed,
             passed: grade.passed,
+            contentVersion,
+            playthroughId,
+            attemptNumber: priorPlaythroughAttempts.length + 1,
+            attempted,
+            firstPass: !isSignal && !priorPlaythroughAttempts.some(isSubstantiveAttempt),
             ...grade.feedback,
           } as Prisma.InputJsonValue;
           await tx.engagementEvent.create({
@@ -126,6 +309,11 @@ export async function persistActivity(input: {
           if (grade.completed && !wasCompleted)
             await tx.engagementEvent.create({
               data: { userId, courseId, type: "BLOCK_COMPLETE", payload },
+            });
+          if (playthrough !== null && activityDone)
+            await playthroughClient?.update({
+              where: { id: playthrough.id },
+              data: { status: "COMPLETED", completedAt: new Date() },
             });
           if (allDone) {
             const incomplete = await tx.lesson.count({

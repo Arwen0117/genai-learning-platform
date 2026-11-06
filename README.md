@@ -14,8 +14,9 @@ bilingual (English / 简体中文) and switches instantly from the header.
 **Learners**
 
 - Browse the public catalog, enrol in a course and resume where they left off.
-- Work through lessons composed of nine block types — reading, quiz, flashcards,
-  reflection, slides, coding exercise, mini-game, simulation and roleplay.
+- Work through lessons composed of reading, quiz, flashcards, reflection, slides,
+  coding exercise, simulation and roleplay blocks, plus a Game Activity made of
+  ordered Challenges.
 - Track per-lesson progress and quiz scores; completing every block completes the lesson.
 - Ask the AI tutor for help inside a lesson (streamed responses, lesson-aware context).
 - Hit **Explain for me** on a block to get a simpler re-explanation, stored per user.
@@ -128,7 +129,7 @@ prisma/
 **学习者**
 
 - 浏览公开课程目录，报名后从上次停下的位置继续。
-- 课程由九种内容块组成：图文阅读、测验、单词卡、反思、幻灯片、编程练习、小游戏、模拟、角色扮演。
+- 课程由图文阅读、测验、单词卡、反思、幻灯片、编程练习、模拟和角色扮演内容块组成，另有由有序 Challenges 构成的 Game Activity。
 - 记录每节课的完成进度与测验得分；所有块都完成后该节课自动完成。
 - 在课时内向 AI 导师提问（流式回答，自动带上当前课时的上下文）。
 - 对任意块点「帮我讲解」，获得更通俗的重新解释，结果按用户保存。

@@ -45,6 +45,10 @@ next-env.d.ts
 .workbuddy/
 
 # local-only planning & agent working docs (kept on disk, never published)
-/docs/
-/AGENTS.md
+/docs/*
+!/docs/agents/
+!/docs/agents/**
 /TASKS.md
+.agents
+skills-lock.json
+.cursor

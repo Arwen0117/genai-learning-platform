@@ -3,7 +3,7 @@ import { blockSchema, type Block } from "@/lib/blocks/schema";
 import { gradeActivity } from "@/lib/blocks/activity-result";
 import { blockDigest } from "@/lib/blocks/digest";
 import { generatedLessonSchema as teacherLesson } from "@/lib/llm/prompts/lesson";
-import { generatedLessonSchema as learnerLesson } from "@/lib/llm/prompts/course";
+import { generatedLessonSchema as learnerLesson, mockLearnerCourse, learnerCourseSchema } from "@/lib/llm/prompts/course";
 import {
   createProgrammingPayload,
   programmingPayloadSchema,
@@ -167,6 +167,11 @@ describe("programming activity contract", () => {
       },
     };
     expect(teacherLesson.safeParse(lesson).success).toBe(true);
-    expect(learnerLesson.safeParse(lesson).success).toBe(true);
+    // Upstream learner generation now requires reading/quiz plus a five-Challenge container.
+    expect(learnerLesson.safeParse(lesson).success).toBe(false);
+    const generated = learnerCourseSchema.parse(mockLearnerCourse()).lessons[0];
+    expect(learnerLesson.safeParse(generated).success).toBe(true);
+    expect(learnerLesson.safeParse({ ...generated, blocks: [generated.blocks[0], block()] }).success).toBe(false);
+    expect(learnerLesson.safeParse({ ...generated, gameActivity: { ...generated.gameActivity, challenges: [block(), ...generated.gameActivity.challenges.slice(1)] } }).success).toBe(false);
   });
 });

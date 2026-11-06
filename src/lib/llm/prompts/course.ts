@@ -2,6 +2,11 @@ import { z } from "zod";
 
 import { blockListSchema } from "@/lib/blocks/schema";
 import {
+  gameActivityContainerSchema,
+  type GameActivityContainer,
+} from "@/lib/game-activity";
+import { mockGameActivity } from "@/lib/llm/prompts/game-activity";
+import {
   CONTENT_LANGUAGE_LABEL,
   contentLanguageLine,
   type ContentLanguage,
@@ -11,22 +16,18 @@ import {
  * Course generation for the learner-facing /generate page (P4.7).
  *
  * The shape is deliberately narrower than the block engine: one module, three
- * lessons, and exactly three blocks per lesson (reading → one interactive
- * block → quiz). Restricting the interactive block to flashcards or a game
- * keeps the generated payload reliable enough to pass `blockListSchema` on the
- * first or second attempt, which matters because a failed generation costs the
- * learner the whole course.
+ * lessons, with reading and quiz blocks plus one validated Game Activity
+ * container. Keeping the activity outside the ordinary block list gives it a
+ * stable identity and ordered Challenge boundary.
  */
 
-/** Interactive blocks a generated lesson may use between the reading and quiz. */
-export const GENERATED_INTERACTIVE_TYPES = ["flashcards", "game"] as const;
-
-/** One generated lesson: reading + one interactive block + quiz, in order. */
+/** One generated lesson: reading + Game Activity + quiz. */
 export const generatedLessonSchema = z
   .object({
     title: z.string().min(2).max(120),
     estimatedMinutes: z.number().int().min(3).max(20),
     blocks: blockListSchema,
+    gameActivity: gameActivityContainerSchema,
   })
   .superRefine((lesson, ctx) => {
     lesson.blocks.forEach((block, index) => {
@@ -36,40 +37,25 @@ export const generatedLessonSchema = z
     const { blocks } = lesson;
     const types = blocks.map((block) => block.type);
 
-    if (blocks.length !== 3) {
+    if (blocks.length !== 2) {
       ctx.addIssue({
         code: "custom",
-        message:
-          "Each lesson needs exactly three blocks: reading, one interactive block, quiz.",
+        message: "Each lesson needs reading and quiz blocks plus one Game Activity.",
         path: ["blocks"],
       });
       return;
     }
 
-    if (types[0] !== "reading" || types[2] !== "quiz") {
+    if (types[0] !== "reading" || types[1] !== "quiz") {
       ctx.addIssue({
         code: "custom",
-        message: "Blocks must be ordered reading, interactive, quiz.",
+        message: "Blocks must be ordered reading, quiz; Game Activity is separate.",
         path: ["blocks"],
-      });
-    }
-
-    const interactive = types[1];
-    if (
-      interactive === undefined
-      || !GENERATED_INTERACTIVE_TYPES.includes(
-        interactive as (typeof GENERATED_INTERACTIVE_TYPES)[number],
-      )
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        message: "The middle block must be a flashcards or game block.",
-        path: ["blocks", 1],
       });
     }
   });
 
-/** The whole mini-course the model has to return. */
+/** The complete course-shaped response the model has to return. */
 export const learnerCourseSchema = z.object({
   title: z.string().min(3).max(90),
   description: z.string().min(20).max(500),
@@ -102,19 +88,20 @@ export function learnerCoursePrompt(
     goalLine,
     contentLanguageLine(language),
     "",
-    "Structure: exactly one module of three lessons. Each lesson has exactly three",
-    "blocks, in this order:",
+    "Structure: exactly one module of three lessons. Each lesson has two ordinary",
+    "blocks, in this order, plus one Game Activity container:",
     "1. reading — 250 to 400 words of markdown. Start with a single # heading, use",
     "   short paragraphs, include one concrete example, and do not use images.",
-    "2. interactive — either flashcards (6 to 8 cards) or game (variant \"match\"",
-    "   with 5 pairs, or variant \"sort\" with 5 items carrying distinct order",
-    "   numbers). Choose whichever fits the lesson.",
-    "3. quiz — passScore 0.7 and exactly 3 single-choice questions, each with 4",
+    "2. quiz — passScore 0.7 and exactly 3 single-choice questions, each with 4",
     "   options, answer as an array containing one index, and a one-sentence",
     "   explanation.",
+    "The Game Activity must be answerable from that lesson's reading and quiz",
+    "content. Include Sort, Match, and Choose Challenges across the activity,",
+    "with deterministic answer metadata, correct and incorrect feedback, Hints,",
+    "and locale-consistent accessible wording.",
     "",
     "Rules:",
-    "- Block ids look like \"blk_l1_reading\", \"blk_l1_cards\", \"blk_l1_quiz\".",
+    "- Block ids look like \"blk_l1_reading\" and \"blk_l1_quiz\".",
     "- Question ids look like \"q_l1_1\".",
     "- Every lesson title is concrete (\"Tea arrives in Taiwan\"), never \"Lesson 1\".",
     "- Factual claims must be things a careful encyclopedia would agree with; hedge",
@@ -125,19 +112,16 @@ export function learnerCoursePrompt(
     "Reply with one JSON object of this exact shape:",
     '{"title": string, "description": string,',
     ' "difficulty": "beginner" | "intermediate" | "advanced",',
-    ' "lessons": [{"title": string, "estimatedMinutes": number, "blocks": Block[]}]}',
+    ' "lessons": [{"title": string, "estimatedMinutes": number,',
+    ' "blocks": Block[], "gameActivity": GameActivityContainer}]}',
     "",
     "Block shapes:",
     'reading: {"id": string, "title": string, "type": "reading",',
     '          "payload": {"markdown": string}}',
     'flashcards: {"id": string, "title": string, "type": "flashcards",',
     '             "payload": {"cards": [{"front": string, "back": string}]}}',
-    'game match: {"id": string, "title": string, "type": "game",',
-    '             "payload": {"variant": "match",',
-    '                         "pairs": [{"left": string, "right": string}]}}',
-    'game sort:  {"id": string, "title": string, "type": "game",',
-    '             "payload": {"variant": "sort",',
-    '                         "items": [{"text": string, "order": number}]}}',
+    'gameActivity: {"id": string, "title": string, "challenges":',
+    '              "Game Activity Challenges[]"}',
     'quiz: {"id": string, "title": string, "type": "quiz",',
     '       "payload": {"passScore": 0.7, "questions": [{"id": string,',
     '                    "kind": "single", "prompt": string,',
@@ -154,10 +138,10 @@ export function learnerCoursePrompt(
  */
 export function mockLearnerCourse(language: ContentLanguage = "en"): unknown {
   if (language === "zh") {
-    return mockChineseLearnerCourse();
+    return withMockGameActivities(mockChineseLearnerCourse(), language);
   }
 
-  return {
+  return withMockGameActivities({
     title: "History of Bubble Tea",
     description:
       "How a chewy drink from Taiwanese tea stalls became a global habit: the two "
@@ -556,6 +540,34 @@ export function mockLearnerCourse(language: ContentLanguage = "en"): unknown {
         ],
       },
     ],
+  }, language);
+}
+
+function withMockGameActivities(
+  course: unknown,
+  language: ContentLanguage,
+): unknown {
+  if (typeof course !== "object" || course === null) return course;
+  const value = course as { lessons?: Array<Record<string, unknown>> };
+  if (!Array.isArray(value.lessons)) return course;
+  return {
+    ...value,
+    lessons: value.lessons.map((lesson) => {
+      const blocks = Array.isArray(lesson.blocks)
+        ? lesson.blocks.filter((block) =>
+            typeof block === "object" && block !== null
+              ? ["reading", "quiz"].includes(
+                  (block as { type?: string }).type ?? "",
+                )
+              : true,
+          )
+        : lesson.blocks;
+      return {
+        ...lesson,
+        blocks,
+        gameActivity: mockGameActivity(language) as GameActivityContainer,
+      };
+    }),
   };
 }
 
