@@ -7,6 +7,7 @@ import { robotCourseEditingSchema, type RobotCourseDraft } from "@/lib/programmi
 import { createParallelProgrammingPayload, parallelProgrammingEditingSchema } from "@/lib/programming-game/parallel-config";
 import { CourseProgrammingForm } from "@/components/teach/editor/course-programming-form";
 import { isParallelProgramming } from "@/lib/programming-game/course-config";
+import { createNumericDeliveryPayload } from "@/lib/programming-game/numeric-delivery";
 import { createDeliveryPayload } from "@/lib/programming-game/delivery-level";
 import { referenceSignature } from "./ReferenceProgramRunner";
 import { RobotLevelDesigner } from "./RobotLevelDesigner";
@@ -57,7 +58,9 @@ export function RobotCourseEditor({ courseId: initialCourseId = null, initial }:
       setDraft({ ...draft, levels: [...draft.levels, { lessonId: crypto.randomUUID(), blockId: crypto.randomUUID(), title: `${w.choose} ${draft.levels.length + 1}`, payload: createParallelProgrammingPayload("parallel-lanes", draft.language) }] }); setActive(draft.levels.length); setGenerated(null);
     }}>{w.add}</Button><Button type="button" variant="outline" disabled={draft.levels.length >= 20} onClick={() => {
       setDraft({ ...draft, levels: [...draft.levels, { lessonId: crypto.randomUUID(), blockId: crypto.randomUUID(), title: locale === "zh" ? "物品配送" : "Parcel delivery", payload: createDeliveryPayload(draft.language) }] }); setActive(draft.levels.length); setGenerated(null); setStudentPreview(false);
-    }}>{locale === "zh" ? "添加配送关卡" : "Add delivery level"}</Button></div>
+    }}>{locale === "zh" ? "添加配送关卡" : "Add delivery level"}</Button><Button type="button" variant="outline" disabled={draft.levels.length >= 20} onClick={() => {
+      setDraft({ ...draft, levels: [...draft.levels, { lessonId: crypto.randomUUID(), blockId: crypto.randomUUID(), title: locale === "zh" ? "数值分类配送" : "Numeric parcel sorting", payload: createNumericDeliveryPayload(draft.language) }] }); setActive(draft.levels.length); setGenerated(null); setStudentPreview(false);
+    }}>{locale === "zh" ? "添加数值分类关卡" : "Add numeric sorting level"}</Button></div>
     <label className="block">{w.levelName}<input className="mt-1 block w-full rounded border bg-background p-2" aria-label={w.levelName} maxLength={120} value={level.title} onChange={(e) => changeLevel({ ...level, title: e.target.value })} /></label>
     <details className="rounded border p-3"><summary className="cursor-pointer">{w.settings}</summary><div className="mt-3"><CourseProgrammingForm payload={level.payload} onChange={(payload) => { if (isParallelProgramming(payload)) changeLevel({ ...level, payload }); }} onPreset={(payload, title) => { if (isParallelProgramming(payload)) changeLevel({ ...level, payload, title }); }} /></div></details>
     <div className="flex flex-wrap gap-2" role="group" aria-label={locale === "zh" ? "编辑视图" : "Editor view"}>

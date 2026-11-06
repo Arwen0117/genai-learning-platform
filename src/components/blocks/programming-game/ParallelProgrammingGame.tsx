@@ -6,7 +6,7 @@ import {
   parseParallelProgram, type ParallelCondition, type ParallelLevel, type ParallelLocation, type ParallelProgram, type ParallelRobot,
 } from "@/lib/programming-game/parallel-engine";
 import { initialParallelPlayer, isParallelTerminal, parallelPlayerReducer } from "@/lib/programming-game/parallel-player";
-import { parallelObservationLabel } from "@/lib/programming-game/parallel-condition";
+import { parallelConditionLabel } from "@/lib/programming-game/parallel-condition";
 import { GAME_MESSAGES } from "./messages";
 import { PARALLEL_MESSAGES } from "./parallel-messages";
 import { ParallelWarehouseBoard } from "./ParallelWarehouseBoard";
@@ -82,8 +82,7 @@ function ParallelSession({ level, title, task, locale, hints = [], reference, on
   }
   const location = (at: ParallelLocation | null | undefined) => at
     ? `${formatPath(at.path)}${at.iteration === null ? "" : ` · ${m.iteration} ${at.iteration}`}` : p.none;
-  const observationName = (c: ParallelCondition) => parallelObservationLabel(c, { ...m.actions, current: p.currentCell, self: p.self });
-  const conditionText = (c: ParallelCondition) => `${c.not ? `${p.negate} · ` : ""}${p.conditions[c.kind]} · ${observationName(c)}`;
+  const conditionText = (c: ParallelCondition) => parallelConditionLabel(c, { ...m.actions, current: p.currentCell, self: p.self }, p.shortConditions, { item: p.itemValue, holding: p.holdingValue });
 
   useEffect(() => {
     if (!state.playing || !execution) return;
@@ -119,7 +118,7 @@ function ParallelSession({ level, title, task, locale, hints = [], reference, on
       <div className="space-y-1 break-words text-sm" aria-label={p.selected}>
         <p className="font-medium">{p.selected}: {selected.id} · {p.robotStatus[selected.status]}</p>
         <p>{m.position}: ({selected.position.x},{selected.position.y})</p>
-        {level.delivery && <p>{selected.holding ? `${p.holding}: ${selected.holding}` : p.emptyHands}</p>}
+        {level.delivery && <p>{selected.holding ? `${p.holding}: ${selected.holding}${level.delivery?.numbers ? ` [${level.delivery.items.find((i) => i.id === selected.holding)?.value}]` : ""}` : p.emptyHands}</p>}
         <p>{p.next}: {location(next)} {next ? `· ${actionName(next.op)}` : ""}</p>
         <p>{p.last}: {location(selected.last)}</p>
         {selected.decision && <p>{p.decision}: {selected.decision.result ? p.true : p.false} · {conditionText(selected.decision.condition)} · {p.tick} {selected.decision.tick} · {m.at} {location(selected.decision.at)}</p>}
@@ -166,7 +165,7 @@ function ParallelSession({ level, title, task, locale, hints = [], reference, on
     </div>
     </div>
     {!course && <div className="pg-level-footer"><span>{execution?.status === "passed" ? (onNext ? m.passed : w.done) : w.locked}</span>{onNext && <Button type="button" disabled={execution?.status !== "passed"} onClick={onNext}>{w.next} <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 12h15m-6-6 6 6-6 6" /></svg></Button>}</div>}
-    <details className="pg-workshop-help"><summary>{p.helpTitle}</summary><div className="space-y-1 text-xs text-muted-foreground"><p>{p.help}</p><p>{course ? m.serverNote : p.note}</p><p>{p.goal}</p><p>{m.resetNote}</p><p>{p.concurrent}</p>{level.delivery && <p>{p.itemHelp}</p>}<p>{p.pausedOnHide}</p><p>{p.limits}</p>{level.allowed.includes("if") && <p>{p.ifNote}</p>}</div></details>
+    <details className="pg-workshop-help"><summary>{p.helpTitle}</summary><div className="space-y-1 text-xs text-muted-foreground"><p>{p.help}</p><p>{course ? m.serverNote : p.note}</p><p>{p.goal}</p><p>{m.resetNote}</p><p>{p.concurrent}</p>{level.delivery && <p>{p.itemHelp}</p>}{level.delivery?.numbers && <p>{p.numericHelp}</p>}<p>{p.pausedOnHide}</p><p>{p.limits}</p>{level.allowed.includes("if") && <p>{p.ifNote}</p>}</div></details>
     {knowledge.length > 0 && <section aria-label={m.knowledgeHeading} className="space-y-2"><h3 className="font-semibold">{m.knowledgeHeading}</h3>{knowledge.map((c, i) => <details key={i} className="rounded border p-3"><summary>{c.title}</summary><p className="whitespace-pre-wrap text-sm">{c.body}</p></details>)}</section>}
   </fieldset>;
 }
@@ -175,7 +174,7 @@ function AnswerProgram({ program, locale }: { program: ParallelProgram; locale: 
   const p = PARALLEL_MESSAGES[locale], m = GAME_MESSAGES[locale];
   return <ol className="pg-answer-list">{program.map((c, i) => <li key={i}>
     {c.op === "repeat" ? <><strong>{m.repeat} × {c.count}</strong><AnswerProgram program={c.body} locale={locale} /></>
-    : c.op === "if" ? <><strong>{p.if} {parallelObservationLabel(c.condition, { ...m.actions, current: p.currentCell, self: p.self })} {c.condition.not ? "≠" : "="} {p.shortConditions[c.condition.kind]}</strong><div>{p.then}<AnswerProgram program={c.then} locale={locale} /></div>{c.else.length > 0 && <div>{p.else}<AnswerProgram program={c.else} locale={locale} /></div>}</>
+    : c.op === "if" ? <><strong>{p.if} {parallelConditionLabel(c.condition, { ...m.actions, current: p.currentCell, self: p.self }, p.shortConditions, { item: p.itemValue, holding: p.holdingValue })}</strong><div>{p.then}<AnswerProgram program={c.then} locale={locale} /></div>{c.else.length > 0 && <div>{p.else}<AnswerProgram program={c.else} locale={locale} /></div>}</>
     : c.op === "label" ? <>{p.label} ◆ {c.id}</> : c.op === "jump" ? <>{p.jump} → {c.target}</> : c.op === "wait" ? p.wait : c.op === "end" ? p.end : m.actions[c.op]}
   </li>)}</ol>;
 }

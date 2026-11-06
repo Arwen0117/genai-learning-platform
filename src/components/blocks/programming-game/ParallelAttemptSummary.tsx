@@ -2,7 +2,7 @@
 import { useI18n } from "@/i18n/client";
 import { readParallelHistory } from "@/lib/programming-game/parallel-history";
 import type { ParallelProgram } from "@/lib/programming-game/parallel-engine";
-import { parallelObservationLabel } from "@/lib/programming-game/parallel-condition";
+import { parallelConditionLabel } from "@/lib/programming-game/parallel-condition";
 import { GAME_MESSAGES } from "./messages";
 import { PARALLEL_MESSAGES } from "./parallel-messages";
 
@@ -19,7 +19,7 @@ export function ParallelAttemptSummary({ result }: { result: unknown }) {
     return program.flatMap((c, i) => {
       const start = `${indent}${i + 1}. `;
       if (c.op === "repeat") return [`${start}${m.repeat} × ${c.count}`, ...lines(c.body, indent + "    ")];
-      if (c.op === "if") return [`${start}${p.if} ${parallelObservationLabel(c.condition, { ...m.actions, current: p.currentCell, self: p.self })} ${c.condition.not ? "≠" : "="} ${p.shortConditions[c.condition.kind]}`, `${indent}  ${p.then}`, ...lines(c.then, indent + "    "), ...(c.else.length ? [`${indent}  ${p.else}`, ...lines(c.else, indent + "    ")] : [])];
+      if (c.op === "if") return [`${start}${p.if} ${parallelConditionLabel(c.condition, { ...m.actions, current: p.currentCell, self: p.self }, p.shortConditions, { item: p.itemValue, holding: p.holdingValue })}`, `${indent}  ${p.then}`, ...lines(c.then, indent + "    "), ...(c.else.length ? [`${indent}  ${p.else}`, ...lines(c.else, indent + "    ")] : [])];
       return [`${start}${c.op === "jump" ? `${p.jump} → ${c.target}` : c.op === "label" ? `${p.label} ${c.id}` : c.op === "wait" ? p.wait : c.op === "end" ? p.end : m.actions[c.op]}`];
     });
   }
@@ -40,7 +40,7 @@ export function ParallelAttemptSummary({ result }: { result: unknown }) {
     {f.failure && <p>{p.failure[f.failure.code]} · {p.tick} {f.failure.tick}</p>}
     {f.errors.map((e, i) => <p key={i}>{m.robot} {e.robotId}: {p.errors[e.code]} · {p.tick} {e.tick} · {m.at} {at(e.at.path)}{e.at.iteration === null ? "" : ` · ${m.iteration} ${e.at.iteration}`}</p>)}
     <ul className="space-y-1">{f.robots.map((r) => <li key={r.id}>{m.robot} {r.id} · {m.position} ({r.position.x},{r.position.y}) · {p.robotStatus[r.status]} · {p.perAttempts}: {r.attempts}{r.blocked ? ` · ${p.blocking[r.blocked.reason]}` : ""}</li>)}</ul>
-    {record.level.delivery && <div><p>{p.itemHelp}</p><ul>{f.items?.map((i) => <li key={i.id}>{p.item} {i.id}: {i.position ? `(${i.position.x},${i.position.y})` : `${p.holding}: ${f.robots.find((r) => r.holding === i.id)?.id}`}</li>)}</ul>{!!f.undeliveredItemIds?.length && <p>{p.undelivered}: {f.undeliveredItemIds.join(", ")}</p>}</div>}
+    {record.level.delivery && <div><p>{p.itemHelp}</p>{record.level.delivery.numbers && <p>{p.numericHelp}</p>}<ul>{f.items?.map((i) => <li key={i.id}>{p.item} {i.id}{record.level.delivery?.numbers ? ` [${record.level.delivery.items.find((v) => v.id === i.id)?.value}]` : ""}: {i.position ? `(${i.position.x},${i.position.y})` : `${p.holding}: ${f.robots.find((r) => r.holding === i.id)?.id}`}</li>)}</ul>{!!f.undeliveredItemIds?.length && <p>{p.undelivered}: {f.undeliveredItemIds.join(", ")}</p>}</div>}
     {f.unmetRobotIds.length > 0 && <p>{p.unmet}: {f.unmetRobotIds.join(", ")}</p>}
     <p className="break-all text-xs text-muted-foreground">rulesVersion: 2 · SHA-256: {f.levelVersion}</p>
     <details><summary>{m.rawRecord}</summary><pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(result, null, 2)}</pre></details>

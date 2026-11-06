@@ -65,7 +65,7 @@ export function parallelProgrammingLevel(input: ParallelProgrammingPayload): Par
 export async function parallelProgrammingVersion(input: ParallelProgrammingPayload): Promise<string> {
   const p = parallelProgrammingEditingSchema.parse(input), level = parallelProgrammingLevel(p);
   const snapshot = { domain: "programming-v2", rulesVersion: p.rulesVersion, templateRevision: p.templateRevision,
-    semantics: { ...(level.delivery ? { delivery: "current-cell-one-item-snapshot-v1" } : {}), collision: "exclusive-snapshot-retry-v1", condition: "snapshot-one-tick-v1", jump: "root-marker-one-tick-v1", controls: "root-repeat-if-actions-v1" },
+    semantics: { ...(level.delivery?.numbers ? { numbers: "integer-item-snapshot-exact-zone-v1" } : {}), ...(level.delivery ? { delivery: "current-cell-one-item-snapshot-v1" } : {}), collision: "exclusive-snapshot-retry-v1", condition: "snapshot-one-tick-v1", jump: "root-marker-one-tick-v1", controls: "root-repeat-if-actions-v1" },
     level: { ...level, allowed: [...level.allowed].sort() }, limits: PARALLEL_LIMITS,
     ...(p.customLevel ? { referenceProgram: parseParallelProgram(p.referenceProgram, level) } : {}),
     task: p.task, hints: p.hints, knowledge: p.knowledge.map((c) => ({ title: c.title, body: c.body })) };

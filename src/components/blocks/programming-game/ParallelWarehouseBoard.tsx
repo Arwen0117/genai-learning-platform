@@ -31,13 +31,14 @@ export function ParallelWarehouseBoard({ level, robots, selectedId, onSelect, pa
                     const goal = level.goals.some((g) => same(g, x, y));
                     const wall = level.walls.some((g) => same(g, x, y));
                     const item = items.find((i) => i.position && same(i.position, x, y));
-                    const target = level.delivery?.targets.some((g) => same(g, x, y));
-                    const labels = [item && `${p.item} ${item.id}`, target && p.delivery, robot && `${m.robot} ${robot.id}: ${p.robotStatus[robot.status]}`, goal && m.goal, wall && m.wall].filter(Boolean);
+                    const target = level.delivery?.targets.find((g) => same(g, x, y));
+                    const itemValue = item && level.delivery?.items.find((v) => v.id === item.id)?.value;
+                    const labels = [item && `${p.item} ${item.id}${level.delivery?.numbers ? ` [${itemValue}]` : ""}`, target && `${p.delivery}${level.delivery?.numbers ? ` [${target.value}]` : ""}`, robot && `${m.robot} ${robot.id}: ${p.robotStatus[robot.status]}`, goal && m.goal, wall && m.wall].filter(Boolean);
                     return <div role="cell" key={x} aria-label={`${x},${y}: ${labels.join(", ") || m.emptyCell}`}
                       className={`pg-warehouse-tile ${wall ? "pg-tile-wall" : goal ? "pg-tile-goal" : ""} ${goal && passed ? "pg-tile-complete" : ""}`}>
                       <span className="pg-tile-coordinate" aria-hidden="true">{x},{y}</span>
-                      {target && <span className="pg-delivery-marker" aria-hidden="true">▧</span>}
-                      {item && <span className="pg-item-marker" aria-hidden="true">📦</span>}
+                      {target && <span className="pg-delivery-marker" aria-hidden="true">▧{level.delivery?.numbers && <b className="pg-value-badge">{target.value}</b>}</span>}
+                      {item && <span className="pg-item-marker" aria-hidden="true">📦{level.delivery?.numbers && <b className="pg-value-badge">{itemValue}</b>}</span>}
                       {goal && <span className="pg-goal-marker" aria-hidden="true"><Flag size={19} /></span>}
                       {wall && <span className="pg-obstacle" aria-hidden="true"><Boxes /></span>}
                     </div>;
@@ -53,7 +54,7 @@ export function ParallelWarehouseBoard({ level, robots, selectedId, onSelect, pa
                 aria-label={`${p.select} ${robot.id} (${robot.position.x},${robot.position.y}): ${p.robotStatus[robot.status]}`}>
                 <span className="pg-robot-shell" aria-hidden="true"><Bot /></span>
                 <span className="pg-parallel-id" aria-hidden="true">{robot.id}</span>
-                {robot.holding && <span className="pg-cargo-marker" aria-label={`${p.holding}: ${robot.holding}`}>📦</span>}
+                {robot.holding && <span className="pg-cargo-marker" aria-label={`${p.holding}: ${robot.holding}${level.delivery?.numbers ? ` [${level.delivery.items.find((v) => v.id === robot.holding)?.value}]` : ""}`}>📦{level.delivery?.numbers && <b className="pg-value-badge">{level.delivery.items.find((v) => v.id === robot.holding)?.value}</b>}</span>}
                 {robot.error && <span className="pg-robot-alert" aria-hidden="true"><AlertTriangle size={16} /></span>}
               </button>;
             })}

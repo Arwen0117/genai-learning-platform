@@ -152,3 +152,6 @@
 .pg-item-marker { position: absolute; left: 6%; top: 6%; font-size: clamp(10px, calc(var(--pg-tile) * .32), 25px); z-index: 4; pointer-events: none; }
 .pg-delivery-marker { position: absolute; inset: 4%; border: 2px dashed #a56a17; border-radius: 8px; color: #a56a17; font-size: 16px; text-align: left; pointer-events: none; }
 .pg-cargo-marker { position: absolute; bottom: 6%; right: 6%; font-size: clamp(10px, calc(var(--pg-tile) * .3), 24px); z-index: 5; }
+
+.pg-value-badge { display: inline-block; min-width: 1.5em; padding: 0 3px; border: 1px solid #355970; border-radius: 4px; background: #fff; color: #173d52; font: bold 12px/1.4 monospace; vertical-align: middle; }
+.pg-delivery-marker:has(.pg-value-badge) { display: flex; gap: 2px; align-items: center; }

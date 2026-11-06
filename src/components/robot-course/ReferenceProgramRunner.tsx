@@ -15,7 +15,7 @@ export function ReferenceProgramRunner({ payload, locale, onChange, onVerified }
   const result = useCallback((passed: boolean) => onVerified(signature, passed), [signature, onVerified]);
   let level;
   try { level = parseParallelLevel(payload.customLevel); }
-  catch { return <p role="alert">{locale === "zh" ? "地图尚不合法：请检查起点、目标、障碍、物品与配送区；物品和配送区数量不能为零或超出上限。" : "Check starts, goals, walls, parcels and delivery zones before running; parcels and zones must not be empty or out of range."}</p>; }
+  catch { return <p role="alert">{locale === "zh" ? "地图尚不合法：请检查起点、目标、障碍、物品与配送区；物品和配送区数量不能为零或超出上限。数值须为-99到99的整数，每件物品须有相同数值的配送区。" : "Check starts, goals, walls, parcels and delivery zones before running; parcels and zones must not be empty or out of range. Values must be integers from -99 to 99 with a matching zone for every parcel."}</p>; }
   return <section aria-label={w.verify} className="space-y-3">
     <p className="text-sm">{w.manualNote}</p>
     <ParallelProgrammingGame course level={level} title={w.verify} task="" locale={locale} initialProgram={payload.referenceProgram ?? []}

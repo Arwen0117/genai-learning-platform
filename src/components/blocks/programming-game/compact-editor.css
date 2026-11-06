@@ -68,3 +68,5 @@
 .pg-block-drag:active { cursor: grabbing; }
 
 .pg-direction-widget > .pg-current-cell { position: absolute; pointer-events: none; left: 7px; top: 3px; padding: 0; font-size: 18px; }
+
+.pg-value-input { width: 72px; min-width: 60px; height: 34px; padding: 4px; background: var(--background); }

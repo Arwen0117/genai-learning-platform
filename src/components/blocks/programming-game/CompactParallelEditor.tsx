@@ -3,9 +3,9 @@
 import { useRef, useState, type DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PARALLEL_ACTIONS, PARALLEL_LIMITS, PARALLEL_IF_DEPTH, type ParallelCondition, type ParallelCommand, type ParallelLevel, type ParallelLocation, type ParallelProgram } from "@/lib/programming-game/parallel-engine";
+import { PARALLEL_COMPARISONS, PARALLEL_VALUE_LIMIT, PARALLEL_ACTIONS, PARALLEL_LIMITS, PARALLEL_IF_DEPTH, type ParallelCondition, type ParallelCommand, type ParallelLevel, type ParallelLocation, type ParallelProgram } from "@/lib/programming-game/parallel-engine";
 import { countParallelNodes, getParallelEditorList, insertParallelCommand, moveParallelCommand, parallelLabels, updateParallelEditorList, type ParallelInsertOp } from "@/lib/programming-game/parallel-editor";
-import { changeParallelConditionKind, changeParallelObservation, parallelObservation } from "@/lib/programming-game/parallel-condition";
+import { PARALLEL_COMPARISON_SYMBOLS, changeParallelConditionKind, changeParallelObservation, parallelObservation } from "@/lib/programming-game/parallel-condition";
 import { GAME_MESSAGES } from "./messages";
 import { PARALLEL_MESSAGES } from "./parallel-messages";
 import "./compact-editor.css";
@@ -146,7 +146,7 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
           <div {...dropHandlers(index, parent)} className="pg-drop-slot" aria-label={`${p.insert} ${num}`}><span>+</span></div>
           <div className="pg-block-header">
             <button type="button" className="pg-block-drag" draggable aria-label={`${p.moveBlock} ${num}`} title={p.moveHint} onDragStart={(event) => startMove(event, path)} onDragEnd={endDrag}>⠿</button>
-            <span className="pg-block-number">{num}</span>
+            {!parent.length && <span className="pg-block-number">{num}</span>}
             <span className="pg-block-name"><span aria-hidden="true">{symbol(c.op)}</span> {name(c.op)}</span>
             {c.op === "repeat" && <Input className="pg-repeat-count" type="number" min={1} max={20} step={1} value={c.count || ""} aria-label={`${m.times} ${num}`}
               onChange={(e) => changeNode(path, (node) => node.op === "repeat" ? { ...node, count: Number(e.target.value) } : node)} />}
@@ -159,21 +159,30 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
               {labels.map((id) => <option key={id} value={id}>◆ {id}</option>)}
             </select>}
             {c.op === "if" && <>
-              {c.condition.kind !== "holding" ? <span className="pg-direction-widget">
+              {parallelObservation(c.condition) !== "self" ? <span className="pg-direction-widget">
                 {parallelObservation(c.condition) === "current" ? <span aria-hidden="true" className="pg-current-cell">◎</span> : <svg aria-hidden="true" className="pg-direction-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: `rotate(${{ right: 0, down: 90, left: 180, up: -90 }[parallelObservation(c.condition) as keyof typeof ARROWS]}deg)` }}><path d="M4 12h15m-6-6 6 6-6 6" /></svg>}
                 <select className="pg-block-select pg-direction-select" value={parallelObservation(c.condition)} aria-label={`${p.direction} ${num}`} title={p.direction}
                   onChange={(e) => changeNode(path, (node) => node.op === "if" ? { ...node, condition: changeParallelObservation(node.condition, e.target.value as keyof typeof ARROWS | "current") } : node)}>
-                  {(c.condition.kind === "goal" || c.condition.kind === "item") && <option value="current">◎ {p.currentCell}</option>}
+                  {(c.condition.kind === "goal" || c.condition.kind === "item" || c.condition.kind === "value") && <option value="current">◎ {p.currentCell}</option>}
                   {Object.entries(ARROWS).map(([dir, arrow]) => <option value={dir} key={dir}>{arrow} {m.actions[dir as keyof typeof ARROWS]}</option>)}
                 </select>
               </span> : <span className="pg-current-cell" title={p.self} aria-label={p.self}>●</span>}
-              <select className="pg-block-select pg-comparison-select" value={c.condition.not ? "not" : "is"} aria-label={`${p.comparison} ${num}`} title={p.comparison}
+              {c.condition.kind === "value" ? <>
+                <select className="pg-block-select" aria-label={`${p.valueSource} ${num}`} value={c.condition.source} onChange={(e) => changeNode(path, (node) => {
+                  if (node.op !== "if" || node.condition.kind !== "value") return node;
+                  const next = { ...node.condition, source: e.target.value as "item" | "holding" }; if (next.source === "holding") delete next.direction;
+                  return { ...node, condition: next };
+                })}><option value="item">{p.itemValue}</option><option value="holding">{p.holdingValue}</option></select>
+                <select className="pg-block-select pg-comparison-select" aria-label={`${p.comparison} ${num}`} value={c.condition.operator} onChange={(e) => changeNode(path, (node) => node.op === "if" && node.condition.kind === "value" ? { ...node, condition: { ...node.condition, operator: e.target.value as typeof PARALLEL_COMPARISONS[number] } } : node)}>{PARALLEL_COMPARISONS.map((op) => <option key={op} value={op}>{PARALLEL_COMPARISON_SYMBOLS[op]}</option>)}</select>
+                <Input className="pg-value-input" type="number" min={-PARALLEL_VALUE_LIMIT} max={PARALLEL_VALUE_LIMIT} step={1} aria-label={`${p.numberValue} ${num}`} value={Number.isFinite(c.condition.value) ? c.condition.value : ""} onChange={(e) => changeNode(path, (node) => node.op === "if" && node.condition.kind === "value" ? { ...node, condition: { ...node.condition, value: e.target.valueAsNumber } } : node)} />
+                {c.condition.not && <button type="button" title={p.negate} aria-label={`${p.negate} ${num}`} onClick={() => changeNode(path, (node) => node.op === "if" ? { ...node, condition: { ...node.condition, not: false } } : node)}>NOT</button>}
+              </> : <select className="pg-block-select pg-comparison-select" value={c.condition.not ? "not" : "is"} aria-label={`${p.comparison} ${num}`} title={p.comparison}
                 onChange={(e) => changeNode(path, (node) => node.op === "if" ? { ...node, condition: { ...node.condition, not: e.target.value === "not" } } : node)}>
                 <option value="is">=</option><option value="not">≠</option>
-              </select>
+              </select>}
               <select className="pg-block-select pg-condition-select" value={c.condition.kind} aria-label={`${p.condition} ${num}`} title={p.conditions[c.condition.kind]}
                 onChange={(e) => changeNode(path, (node) => node.op === "if" ? { ...node, condition: changeParallelConditionKind(node.condition, e.target.value as ParallelCondition["kind"]) } : node)}>
-                {(["wall", "boundary", "robot", "goal", ...(level.delivery ? ["item", "holding"] as const : [])] as const).map((kind) => <option value={kind} key={kind}>{p.shortConditions[kind]}</option>)}
+                {(["wall", "boundary", "robot", "goal", ...(level.delivery ? ["item", "holding"] as const : []), ...(level.delivery?.numbers ? ["value"] as const : [])] as const).map((kind) => <option value={kind} key={kind}>{p.shortConditions[kind]}</option>)}
               </select>
             </>}
             {nodeMenu(c, index, list, parent)}
