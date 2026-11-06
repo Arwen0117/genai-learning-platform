@@ -9,6 +9,7 @@ import {
   composeRepoSourceText,
   MAX_INSTRUCTIONS_CHARS,
 } from "@/lib/course-source";
+import { describeImages } from "@/lib/describe-images";
 import {
   GithubRepoError,
   fetchFileContent,
@@ -24,6 +25,7 @@ import {
   type RepoTreeEntry,
 } from "@/lib/github-repo";
 import { registerLlmMocks } from "@/lib/llm/mocks";
+import { contentLanguageFromLocale } from "@/lib/llm/language";
 import { LlmError, generateJson } from "@/lib/llm/provider";
 import {
   repoAnalysisPrompt,
@@ -36,6 +38,7 @@ import {
   suggestedFilesSchema,
 } from "@/lib/llm/prompts/suggest-files";
 import { MAX_SELECTED_FILES } from "@/lib/repo-tree";
+import { figureLines, readUploadedImages } from "@/lib/upload-images";
 import {
   generateLearnerCourse,
   type GenerateCourseResult,
@@ -342,6 +345,11 @@ export type GenerateCourseFromRepoInput = z.input<
    * and validated by the shared document reader instead.
    */
   document?: File;
+  /**
+   * Images dropped next to the document. Described by the vision model and
+   * appended to the prompt; a repository course does not need a topic for them.
+   */
+  images?: File[];
 };
 
 /** Text budget for the optional document, leaving room for the selected files. */
@@ -360,7 +368,8 @@ const MAX_REPO_DOCUMENT_CHARS = 8_000;
 export async function generateCourseFromRepoAction(
   input: GenerateCourseFromRepoInput,
 ): Promise<GenerateCourseResult> {
-  const { t } = await getI18n();
+  const { locale, t } = await getI18n();
+  const language = contentLanguageFromLocale(locale);
 
   const session = await auth();
   const userId = session?.user?.id;
@@ -382,6 +391,14 @@ export async function generateCourseFromRepoAction(
 
   const document = input.document;
   if (document !== undefined && !(document instanceof File)) {
+    return { ok: false, error: t("server.generate.repo.invalidSelection") };
+  }
+
+  const images = input.images;
+  if (
+    images !== undefined &&
+    (!Array.isArray(images) || images.some((image) => !(image instanceof File)))
+  ) {
     return { ok: false, error: t("server.generate.repo.invalidSelection") };
   }
 
@@ -429,7 +446,23 @@ export async function generateCourseFromRepoAction(
       warnings.push(t("server.generate.repo.truncated"));
     }
 
-    const sourceText = composeRepoSourceText({
+    let figures: string[] = [];
+    if (images !== undefined && images.length > 0) {
+      const uploaded = await readUploadedImages(images, t);
+      warnings.push(...uploaded.warnings);
+
+      if (uploaded.images.length > 0) {
+        const described = await describeImages(uploaded.images, language);
+
+        if (described.failed) {
+          warnings.push(t("server.generate.file.imagesFailed"));
+        } else if (described.descriptions.length > 0) {
+          figures = figureLines(described.descriptions);
+        }
+      }
+    }
+
+    const composed = composeRepoSourceText({
       owner: ref.owner,
       repo: ref.repo,
       branch,
@@ -437,6 +470,8 @@ export async function generateCourseFromRepoAction(
       files: selected.files,
       documentText,
     });
+    const sourceText =
+      figures.length > 0 ? [composed, "", ...figures].join("\n") : composed;
 
     const result = await generateLearnerCourse({
       topic: topicFromRepo(ref.owner, ref.repo),

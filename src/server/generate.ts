@@ -10,7 +10,11 @@ import type { Translator } from "@/i18n/translate";
 import { trackEvent } from "@/lib/analytics";
 import { auth } from "@/lib/auth";
 import { DOCUMENT_ERROR_KEYS, readCourseDocument } from "@/lib/course-document";
-import { withInstructions } from "@/lib/course-source";
+import { courseFileKind, isImageName } from "@/lib/course-file";
+import {
+  instructionsSection,
+  withInstructions,
+} from "@/lib/course-source";
 import { describeImages } from "@/lib/describe-images";
 import { validateGameActivity } from "@/lib/game-activity";
 import {
@@ -24,12 +28,17 @@ import {
   learnerCourseSchema,
 } from "@/lib/llm/prompts/course";
 import {
+  enhanceTopicPrompt,
+  enhancedTopicSchema,
+} from "@/lib/llm/prompts/enhance-topic";
+import {
   extractPptxImages,
   rankForDropping,
   type ExtractedImage,
 } from "@/lib/ppt-image-extractor";
 import { prisma } from "@/lib/prisma";
 import { MAX_SELECTED_FILES } from "@/lib/repo-tree";
+import { figureLines, readUploadedImages } from "@/lib/upload-images";
 
 /**
  * Learner self-service course generation (P4.7).
@@ -64,6 +73,12 @@ type GenerateCourseInput = z.input<typeof generateInputSchema> & {
    * existing caller keeps working.
    */
   sourceText?: string;
+  /**
+   * Guidance for the topic-only flow, where there is no document to carry the
+   * instructions. The document and repository flows keep prepending their
+   * instructions to `sourceText` instead, so nothing is duplicated.
+   */
+  instructions?: string;
   /**
    * GitHub metadata for repo-generated courses (Phase 4). Also outside the
    * Zod schema for the same reason: the existing flows never pass it.
@@ -251,12 +266,19 @@ function buildCoursePrompt(
   goal: string,
   language: ContentLanguage,
   sourceText: string,
+  instructions = "",
 ): string {
-  const prompt = learnerCoursePrompt(topic, goal, language);
+  const parts = [learnerCoursePrompt(topic, goal, language)];
+  const guidance = instructionsSection(instructions);
+
+  if (guidance.length > 0) {
+    parts.push("", ...guidance);
+  }
+
   const source = sourceText.trim();
 
   if (source.length === 0) {
-    return prompt;
+    return parts.join("\n");
   }
 
   // Server actions are public endpoints: a direct caller can pass any string,
@@ -267,8 +289,7 @@ function buildCoursePrompt(
       ? truncateToTokens(source, maxSourceTokens)
       : source;
 
-  return [
-    prompt,
+  parts.push(
     "",
     "Ground the course in the learner's document below. Use its facts, examples",
     "and terminology, and ignore anything in it that does not fit the topic.",
@@ -276,7 +297,9 @@ function buildCoursePrompt(
     "--- BEGIN DOCUMENT ---",
     fitted,
     "--- END DOCUMENT ---",
-  ].join("\n");
+  );
+
+  return parts.join("\n");
 }
 
 /** Filename stem becomes the course topic; short names get a neutral fallback. */
@@ -314,6 +337,8 @@ export async function generateLearnerCourse(
   const { topic, goal } = parsedInput.data;
   const sourceText =
     typeof input?.sourceText === "string" ? input.sourceText : "";
+  const instructions =
+    typeof input?.instructions === "string" ? input.instructions : "";
 
   const parsedRepo =
     input.repo === undefined ? null : repoMetadataSchema.safeParse(input.repo);
@@ -327,7 +352,7 @@ export async function generateLearnerCourse(
   try {
     const generated = await generateJson(
       learnerCourseSchema,
-      buildCoursePrompt(topic, goal, language, sourceText),
+      buildCoursePrompt(topic, goal, language, sourceText, instructions),
       {
         usage: "learner-course",
         userId,
@@ -434,13 +459,63 @@ export async function generateLearnerCourse(
   }
 }
 
+/** Files that arrived in one upload, split by what the pipeline does with them. */
+type UploadParts = {
+  document: File | null;
+  images: File[];
+  /** Neither a supported document nor a supported image. */
+  unknown: File[];
+};
+
 /**
- * Generates a course from an uploaded PDF or PPTX.
+ * One `files` field carries everything: at most one document plus the dropped
+ * images. Splitting by extension keeps the document pipeline untouched and
+ * lets an image reuse the vision channel PPTX already runs.
+ */
+function splitUploads(formData: FormData): UploadParts {
+  const files = formData
+    .getAll("files")
+    .filter((entry): entry is File => entry instanceof File);
+
+  // Older callers posted a single `file` field; keep accepting it.
+  const legacy = formData.get("file");
+  if (legacy instanceof File) {
+    files.unshift(legacy);
+  }
+
+  let document: File | null = null;
+  const images: File[] = [];
+  const unknown: File[] = [];
+
+  for (const file of files) {
+    if (courseFileKind(file.name) !== null) {
+      // The form allows one document; a second one is ignored rather than
+      // silently replacing the first.
+      if (document === null) {
+        document = file;
+      }
+      continue;
+    }
+
+    if (isImageName(file.name)) {
+      images.push(file);
+      continue;
+    }
+
+    unknown.push(file);
+  }
+
+  return { document, images, unknown };
+}
+
+/**
+ * Generates a course from an uploaded PDF/PPTX and/or dropped images.
  *
- * Pipeline: validate → extract text → extract content images (PPTX only) →
- * fit the input budget → describe the surviving images → reuse
- * `generateLearnerCourse`. Nothing here throws: every failure becomes an
- * `{ ok: false, error }` result, and image problems degrade to text-only.
+ * Pipeline: split the upload → extract text and slide images from the document
+ * → widen the uploads into `ExtractedImage`s → fit the input budget → describe
+ * the surviving images → reuse `generateLearnerCourse`. Nothing here throws:
+ * every failure becomes an `{ ok: false, error }` result, and image problems
+ * degrade to a warning.
  */
 export async function generateCourseFromFileAction(
   formData: FormData,
@@ -459,33 +534,76 @@ export async function generateCourseFromFileAction(
       return { ok: false, error: t("server.generate.file.choose") };
     }
 
-    const file = formData.get("file");
-    if (!(file instanceof File)) {
-      return { ok: false, error: t("server.generate.file.choose") };
+    const upload = splitUploads(formData);
+    if (upload.document === null && upload.images.length === 0) {
+      return {
+        ok: false,
+        error:
+          upload.unknown.length > 0
+            ? t("server.generate.file.type")
+            : t("server.generate.file.choose"),
+      };
     }
-
-    // Validation + decoding + text extraction live in one shared helper so the
-    // repository flow can read its optional document through the same path.
-    const document = await readCourseDocument(file);
-    if (!document.ok) {
-      return { ok: false, error: t(DOCUMENT_ERROR_KEYS[document.code]) };
-    }
-
-    const { kind, bytes, text } = document;
 
     const warnings: string[] = [];
+    if (upload.unknown.length > 0) {
+      warnings.push(
+        t("server.generate.file.ignored", { count: upload.unknown.length }),
+      );
+    }
+
+    let text = "";
     let images: ExtractedImage[] = [];
     let slideTexts = new Map<number, string>();
 
-    if (kind === "pptx") {
-      try {
-        const extraction = await extractPptxImages(bytes);
-        images = extraction.images;
-        slideTexts = extraction.slideTexts;
-      } catch (error: unknown) {
-        console.error("[generate] image extraction failed", error);
-        warnings.push(t("server.generate.file.imagesFailed"));
+    if (upload.document !== null) {
+      // Validation + decoding + text extraction live in one shared helper so
+      // the repository flow can read its optional document through it too.
+      const document = await readCourseDocument(upload.document);
+      if (!document.ok) {
+        return { ok: false, error: t(DOCUMENT_ERROR_KEYS[document.code]) };
       }
+
+      text = document.text;
+
+      if (document.kind === "pptx") {
+        try {
+          const extraction = await extractPptxImages(document.bytes);
+          images = extraction.images;
+          slideTexts = extraction.slideTexts;
+        } catch (error: unknown) {
+          console.error("[generate] image extraction failed", error);
+          warnings.push(t("server.generate.file.imagesFailed"));
+        }
+      }
+    }
+
+    if (upload.images.length > 0) {
+      const uploaded = await readUploadedImages(upload.images, t);
+      images.push(...uploaded.images);
+      warnings.push(...uploaded.warnings);
+    }
+
+    // Every image was rejected and there is no document: nothing to ground a
+    // course on, so the per-file warnings become one clear error instead.
+    if (upload.document === null && images.length === 0) {
+      return { ok: false, error: t("server.generate.file.noUsableImages") };
+    }
+
+    // A document names the course; a pile of images needs the learner to say
+    // what they are about, because a filename is not a topic.
+    let topic: string;
+    if (upload.document !== null) {
+      topic = topicFromFileName(upload.document.name, t);
+    } else {
+      const rawTopic = formData.get("topic");
+      const trimmedTopic =
+        typeof rawTopic === "string" ? rawTopic.trim().slice(0, 120) : "";
+
+      if (trimmedTopic.length < 3) {
+        return { ok: false, error: t("server.generate.file.topicRequired") };
+      }
+      topic = trimmedTopic;
     }
 
     const plan = planInput(text, images, slideTexts, t);
@@ -494,7 +612,6 @@ export async function generateCourseFromFileAction(
     }
     warnings.push(...plan.warnings);
 
-    const topic = topicFromFileName(file.name, t);
     const rawGoal = formData.get("goal");
     const goal = typeof rawGoal === "string" ? rawGoal.trim().slice(0, 300) : "";
     const rawInstructions = formData.get("instructions");
@@ -509,14 +626,12 @@ export async function generateCourseFromFileAction(
       if (described.failed) {
         warnings.push(t("server.generate.file.imagesFailed"));
       } else if (described.descriptions.length > 0) {
-        sourceText = [
-          sourceText,
-          "",
-          "Figures extracted from the document (described from their slides):",
-          ...described.descriptions.map(
-            (entry) => `- Slide ${entry.slideNumber}: ${entry.text}`,
-          ),
-        ].join("\n");
+        const figures = figureLines(described.descriptions);
+
+        sourceText =
+          sourceText.trim().length > 0
+            ? [sourceText, "", ...figures].join("\n")
+            : figures.join("\n");
       }
     }
 
@@ -536,6 +651,60 @@ export async function generateCourseFromFileAction(
   } catch (error: unknown) {
     console.error("[generate] file course generation failed", error);
     return { ok: false, error: t("server.generate.failed") };
+  }
+}
+
+export type EnhanceTopicResult =
+  | { ok: true; goal: string; instructions: string; questions: string[] }
+  | { ok: false; error: string };
+
+/**
+ * Expands a one-line topic into the brief the form already offers.
+ *
+ * The reply is never submitted on the learner's behalf: `goal` and
+ * `instructions` land in editable fields, and the questions are a checklist for
+ * the learner to answer or ignore.
+ */
+export async function enhanceTopicAction(
+  topic: string,
+): Promise<EnhanceTopicResult> {
+  const { locale, t } = await getI18n();
+  const language = contentLanguageFromLocale(locale);
+
+  const trimmed = typeof topic === "string" ? topic.trim() : "";
+  if (trimmed.length < 3 || trimmed.length > 120) {
+    return { ok: false, error: t("server.generate.enhance.topicLength") };
+  }
+
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (userId === undefined) {
+    return { ok: false, error: t("server.generate.signIn") };
+  }
+
+  registerLlmMocks();
+
+  try {
+    const enhanced = await generateJson(
+      enhancedTopicSchema,
+      enhanceTopicPrompt(trimmed, language),
+      {
+        usage: "enhance-topic",
+        userId,
+        input: { topic: trimmed },
+        temperature: 0.6,
+      },
+    );
+
+    return {
+      ok: true,
+      goal: enhanced.goal,
+      instructions: enhanced.instructions,
+      questions: enhanced.questions,
+    };
+  } catch (error: unknown) {
+    console.error("[generate] topic enhancement failed", error);
+    return { ok: false, error: t("server.generate.enhance.failed") };
   }
 }
 

@@ -1,6 +1,7 @@
 import { readContentLanguage } from "@/lib/llm/language";
 import { mockText, registerMock } from "@/lib/llm/mock";
 import { mockLearnerCourse } from "@/lib/llm/prompts/course";
+import { mockEnhancedTopic } from "@/lib/llm/prompts/enhance-topic";
 import { mockExplain } from "@/lib/llm/prompts/explain";
 import { mockLesson } from "@/lib/llm/prompts/lesson";
 import { mockCourseOutline } from "@/lib/llm/prompts/outline";
@@ -42,6 +43,7 @@ export function registerLlmMocks(): void {
   registerMock("learner-course", ({ prompt }) =>
     mockLearnerCourse(readContentLanguage(prompt)),
   );
+  registerMock("enhance-topic", ({ prompt }) => mockEnhancedTopic(prompt));
   registerMock("repo-analysis", ({ prompt }) =>
     mockRepoAnalysis(repoLabelFromPrompt(prompt)),
   );
