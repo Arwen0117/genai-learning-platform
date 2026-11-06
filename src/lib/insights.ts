@@ -2,6 +2,11 @@ import type { Prisma, ProgressStatus } from "@prisma/client";
 
 import { blockListSchema } from "@/lib/blocks/schema";
 import { blockMetaFor } from "@/lib/blocks/meta";
+import {
+  FEEDBACK_REASONS,
+  isFeedbackReason,
+  type FeedbackReason,
+} from "@/lib/feedback";
 import { prisma } from "@/lib/prisma";
 import {
   completionPercent,
@@ -372,4 +377,127 @@ export async function loadCourseInsights(
     })),
     blockMix,
   };
+}
+
+/** One lesson's feedback tally, as the teacher dashboard renders it. */
+export type LessonFeedbackRow = {
+  lessonId: string;
+  lessonTitle: string;
+  counts: Record<FeedbackReason, number>;
+  total: number;
+  latestNote: { reason: string; note: string; createdAt: Date } | null;
+};
+
+function emptyFeedbackCounts(): Record<FeedbackReason, number> {
+  return {
+    CONTENT_ERROR: 0,
+    TOO_HARD: 0,
+    TOO_SHALLOW: 0,
+    BAD_EXAMPLE: 0,
+  };
+}
+
+type LatestNoteRow = {
+  lessonId: string;
+  reason: string;
+  note: string | null;
+  createdAt: Date;
+};
+
+/**
+ * Feedback per lesson for one course.
+ *
+ * Counts never leave the database: one grouped query returns a row per
+ * (lesson, reason) pair. The newest note per lesson is resolved with a second
+ * grouped query on `max(createdAt)` and read back by that pair, so the module
+ * never pulls every comment into memory. Lessons nobody complained about are
+ * omitted — the dashboard lists only real complaints.
+ */
+export async function loadLessonFeedback(input: {
+  courseId: string;
+}): Promise<LessonFeedbackRow[]> {
+  const [groups, noteGroups] = await Promise.all([
+    prisma.lessonFeedback.groupBy({
+      by: ["lessonId", "reason"],
+      where: { courseId: input.courseId },
+      _count: { _all: true },
+    }),
+    prisma.lessonFeedback.groupBy({
+      by: ["lessonId"],
+      where: { courseId: input.courseId, note: { not: null } },
+      _max: { createdAt: true },
+    }),
+  ]);
+
+  if (groups.length === 0) {
+    return [];
+  }
+
+  const lessonIds = [...new Set(groups.map((group) => group.lessonId))];
+  const noteKeys = noteGroups.flatMap((group) =>
+    group._max.createdAt === null
+      ? []
+      : [{ lessonId: group.lessonId, createdAt: group._max.createdAt }],
+  );
+
+  const [lessons, latestRows]: [
+    Array<{ id: string; title: string }>,
+    LatestNoteRow[],
+  ] = await Promise.all([
+    prisma.lesson.findMany({
+      where: { id: { in: lessonIds } },
+      select: { id: true, title: true },
+    }),
+    noteKeys.length === 0
+      ? Promise.resolve<LatestNoteRow[]>([])
+      : prisma.lessonFeedback.findMany({
+          where: { courseId: input.courseId, note: { not: null }, OR: noteKeys },
+          select: { lessonId: true, reason: true, note: true, createdAt: true },
+        }),
+  ]);
+
+  const countsByLesson = new Map<string, Record<FeedbackReason, number>>();
+  for (const group of groups) {
+    if (!isFeedbackReason(group.reason)) {
+      continue;
+    }
+
+    const counts = countsByLesson.get(group.lessonId) ?? emptyFeedbackCounts();
+    counts[group.reason] = group._count._all;
+    countsByLesson.set(group.lessonId, counts);
+  }
+
+  const titleById = new Map(lessons.map((lesson) => [lesson.id, lesson.title]));
+  const latestByLesson = new Map<
+    string,
+    { reason: string; note: string; createdAt: Date }
+  >();
+
+  for (const row of latestRows) {
+    if (row.note === null || latestByLesson.has(row.lessonId)) {
+      continue;
+    }
+    latestByLesson.set(row.lessonId, {
+      reason: row.reason,
+      note: row.note,
+      createdAt: row.createdAt,
+    });
+  }
+
+  return lessonIds
+    .map((lessonId) => {
+      const counts = countsByLesson.get(lessonId) ?? emptyFeedbackCounts();
+
+      return {
+        lessonId,
+        lessonTitle: titleById.get(lessonId) ?? lessonId,
+        counts,
+        total: FEEDBACK_REASONS.reduce(
+          (sum, reason) => sum + counts[reason],
+          0,
+        ),
+        latestNote: latestByLesson.get(lessonId) ?? null,
+      };
+    })
+    .sort((first, second) => second.total - first.total);
 }

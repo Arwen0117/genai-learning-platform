@@ -53,6 +53,7 @@ model User {
   blockOverrides UserBlockOverride[]
   activityAttempts ActivityAttempt[]
   playthroughs Playthrough[]
+  lessonFeedback LessonFeedback[]
 }
 
 model Course {
@@ -113,6 +114,7 @@ model Lesson {
   activityAttempts ActivityAttempt[]
   playthroughs     Playthrough[]
   gameActivityVersions GameActivityVersion[]
+  feedback         LessonFeedback[]
 }
 
 /// Immutable published snapshot of one Game Activity. Playthroughs bind to the
@@ -245,6 +247,9 @@ model ActivityAttempt {
   createdAt DateTime @default(now())
   @@unique([userId, lessonId, blockId, attemptId])
   @@index([userId, lessonId, blockId, createdAt])
+  /// Created by 20261101232000_add_game_activity_playthrough; declared here so
+  /// later migrations do not treat it as drift and drop it.
+  @@index([playthroughId])
 }
 
 model Playthrough {
@@ -267,4 +272,27 @@ model Playthrough {
   @@index([userId, lessonId, activityId, createdAt])
   @@index([userId, lessonId, activityId, status])
   @@index([publishedVersionId])
+}
+
+/// One learner's verdict on one lesson.
+///
+/// One row per learner per lesson: changing the reason replaces the previous
+/// verdict instead of stacking, so a single annoyed learner cannot flood the
+/// teacher dashboard. `reason` is a plain string (CONTENT_ERROR / TOO_HARD /
+/// TOO_SHALLOW / BAD_EXAMPLE) to match every other status-like column here.
+model LessonFeedback {
+  id        String   @id @default(cuid())
+  lessonId  String
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  /// Denormalised so the teacher dashboard can group by course in one query.
+  courseId  String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason    String
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([lessonId, userId])
+  @@index([courseId, createdAt])
 }

@@ -21,7 +21,8 @@ export type EngagementEventType =
   | "ROLEPLAY_END"
   | "TUTOR_OPEN"
   | "TUTOR_MESSAGE"
-  | "GENERATE_COURSE";
+  | "GENERATE_COURSE"
+  | "LESSON_FEEDBACK";
 
 export type TrackEventInput = {
   userId?: string;

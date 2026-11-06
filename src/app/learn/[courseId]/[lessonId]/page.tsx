@@ -16,6 +16,7 @@ import { Suspense } from "react";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer";
 import { CourseDetail } from "@/components/courses/course-detail";
 import { ExploreSourceButton } from "@/components/learn/explore-source-button";
+import { LessonFeedback } from "@/components/learn/lesson-feedback";
 import {
   LessonOutline,
   type OutlineModule,
@@ -39,6 +40,7 @@ import {
   type CourseLesson,
   type LessonProgressRecord,
 } from "@/lib/courses";
+import { isFeedbackReason } from "@/lib/feedback";
 import { isMockMode } from "@/lib/llm/provider";
 import { prisma } from "@/lib/prisma";
 import { loadTutorHistory } from "@/lib/tutor";
@@ -237,6 +239,19 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
     ? []
     : await loadTutorHistory(userId, courseId, lessonId);
 
+  // The learner's own verdict, so the widget opens with the choice they made
+  // instead of an empty form. Unknown stored values (older rows) are dropped.
+  const storedFeedback = canPreview
+    ? null
+    : await prisma.lessonFeedback.findUnique({
+        where: { lessonId_userId: { lessonId, userId } },
+        select: { reason: true, note: true },
+      });
+  const feedbackSeed =
+    storedFeedback !== null && isFeedbackReason(storedFeedback.reason)
+      ? { reason: storedFeedback.reason, note: storedFeedback.note ?? "" }
+      : null;
+
   return (
     <div className="grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
       <LessonOutline
@@ -419,6 +434,10 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
             </Link>
           </div>
         ) : null}
+
+        {canPreview ? null : (
+          <LessonFeedback initial={feedbackSeed} lessonId={lessonId} />
+        )}
 
         <nav
           aria-label={t("lesson.nav")}
