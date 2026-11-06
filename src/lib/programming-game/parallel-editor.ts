@@ -1,5 +1,5 @@
 import {
-  PARALLEL_COMMANDS, PARALLEL_LIMITS, PARALLEL_IF_DEPTH, countParallelProgramNodes,
+  ALL_PARALLEL_COMMANDS as PARALLEL_COMMANDS, PARALLEL_LIMITS, PARALLEL_IF_DEPTH, countParallelProgramNodes,
   type ParallelCommand, type ParallelLevel, type ParallelProgram,
 } from "./parallel-engine";
 

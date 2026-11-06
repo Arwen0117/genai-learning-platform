@@ -7,6 +7,7 @@ import { robotCourseEditingSchema, type RobotCourseDraft } from "@/lib/programmi
 import { createParallelProgrammingPayload, parallelProgrammingEditingSchema } from "@/lib/programming-game/parallel-config";
 import { CourseProgrammingForm } from "@/components/teach/editor/course-programming-form";
 import { isParallelProgramming } from "@/lib/programming-game/course-config";
+import { createDeliveryPayload } from "@/lib/programming-game/delivery-level";
 import { referenceSignature } from "./ReferenceProgramRunner";
 import { RobotLevelDesigner } from "./RobotLevelDesigner";
 import { RobotCourseScreen } from "./RobotCourseScreen";
@@ -54,7 +55,9 @@ export function RobotCourseEditor({ courseId: initialCourseId = null, initial }:
     <label className="flex gap-2">{w.status}<select className="rounded border bg-background p-2" aria-label={w.status} value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as typeof draft.status })}><option value="DRAFT">{w.draft}</option><option value="PUBLISHED">{w.published}</option><option value="ARCHIVED">{w.archived}</option></select></label>
     <div className="flex flex-wrap items-center gap-3"><label>{w.choose}<select className="ml-2 max-w-full rounded border bg-background p-2" aria-label={w.choose} value={active} onChange={(e) => { setActive(Number(e.target.value)); setGenerated(null); }}>{draft.levels.map((l, i) => <option key={l.lessonId} value={i}>{i + 1}. {l.title}</option>)}</select></label><Button type="button" variant="outline" disabled={draft.levels.length >= 20} onClick={() => {
       setDraft({ ...draft, levels: [...draft.levels, { lessonId: crypto.randomUUID(), blockId: crypto.randomUUID(), title: `${w.choose} ${draft.levels.length + 1}`, payload: createParallelProgrammingPayload("parallel-lanes", draft.language) }] }); setActive(draft.levels.length); setGenerated(null);
-    }}>{w.add}</Button></div>
+    }}>{w.add}</Button><Button type="button" variant="outline" disabled={draft.levels.length >= 20} onClick={() => {
+      setDraft({ ...draft, levels: [...draft.levels, { lessonId: crypto.randomUUID(), blockId: crypto.randomUUID(), title: locale === "zh" ? "物品配送" : "Parcel delivery", payload: createDeliveryPayload(draft.language) }] }); setActive(draft.levels.length); setGenerated(null); setStudentPreview(false);
+    }}>{locale === "zh" ? "添加配送关卡" : "Add delivery level"}</Button></div>
     <label className="block">{w.levelName}<input className="mt-1 block w-full rounded border bg-background p-2" aria-label={w.levelName} maxLength={120} value={level.title} onChange={(e) => changeLevel({ ...level, title: e.target.value })} /></label>
     <details className="rounded border p-3"><summary className="cursor-pointer">{w.settings}</summary><div className="mt-3"><CourseProgrammingForm payload={level.payload} onChange={(payload) => { if (isParallelProgramming(payload)) changeLevel({ ...level, payload }); }} onPreset={(payload, title) => { if (isParallelProgramming(payload)) changeLevel({ ...level, payload, title }); }} /></div></details>
     <div className="flex flex-wrap gap-2" role="group" aria-label={locale === "zh" ? "编辑视图" : "Editor view"}>

@@ -6,6 +6,7 @@ vi.mock("@/lib/llm/provider", () => ({ generateJson: m.generate, isMockMode: () 
 import { saveRobotCourse, loadRobotCourseDraft } from "./robot-courses";
 import { generateProgrammingHints } from "./programming-hints";
 import { loadRobotGame } from "@/lib/programming-game/robot-course-access";
+import { createDeliveryPayload } from "@/lib/programming-game/delivery-level";
 import { createRobotCourseDraft } from "@/lib/programming-game/robot-course";
 let i = 0; const id = () => `00000000-0000-4000-8000-${String(++i).padStart(12, "0")}`;
 function fixture() {
@@ -101,5 +102,23 @@ describe("teacher AI hint access", () => {
   it("does not send an invalid reference to the model", async () => {
     const { p } = fixture(); p.levels[0].payload.allowed = [];
     expect(await generateProgrammingHints({ locale: "en", payload: p.levels[0].payload })).toMatchObject({ ok: false }); expect(m.generate).not.toHaveBeenCalled();
+  });
+});
+
+describe("delivery course persistence and hint boundaries", () => {
+  it("persists a teacher delivery map and its executable reference answer", async () => {
+    const p = createRobotCourseDraft("en", id); p.levels[0].payload = createDeliveryPayload("en", 4);
+    expect(await saveRobotCourse(null, p)).toMatchObject({ ok: true });
+    const block = m.create.mock.calls[0][0].data.modules.create.lessons.create[0].blocks[0];
+    expect(block.payload.customLevel.delivery.items).toHaveLength(4); expect(block.payload.referenceProgram[0].op).toBe("pickup");
+  });
+  it("rejects a carried-but-not-delivered reference before opening a transaction or generating hints", async () => {
+    const p = createRobotCourseDraft("en", id); const payload = createDeliveryPayload("en"); payload.referenceProgram = payload.referenceProgram!.slice(0, 2); p.levels[0].payload = payload;
+    expect(await saveRobotCourse(null, p)).toMatchObject({ ok: false }); expect(m.transaction).not.toHaveBeenCalled();
+    expect(await generateProgrammingHints({ locale: "en", payload })).toMatchObject({ ok: false }); expect(m.generate).not.toHaveBeenCalled();
+  });
+  it("loads saved parcel starts, destinations and reference without losing fields", async () => {
+    const { p, row } = fixture(); const payload = createDeliveryPayload("zh"); p.levels[0].payload = payload; row.modules[0].lessons[0].blocks[0].payload = payload; m.find.mockResolvedValue(row);
+    expect((await loadRobotCourseDraft(row.id))?.draft.levels[0].payload).toEqual(payload);
   });
 });

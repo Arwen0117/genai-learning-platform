@@ -3,8 +3,9 @@
 import { useRef, useState, type DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PARALLEL_ACTIONS, PARALLEL_LIMITS, PARALLEL_IF_DEPTH, type ParallelCommand, type ParallelLevel, type ParallelLocation, type ParallelProgram } from "@/lib/programming-game/parallel-engine";
+import { PARALLEL_ACTIONS, PARALLEL_LIMITS, PARALLEL_IF_DEPTH, type ParallelCondition, type ParallelCommand, type ParallelLevel, type ParallelLocation, type ParallelProgram } from "@/lib/programming-game/parallel-engine";
 import { countParallelNodes, getParallelEditorList, insertParallelCommand, moveParallelCommand, parallelLabels, updateParallelEditorList, type ParallelInsertOp } from "@/lib/programming-game/parallel-editor";
+import { changeParallelConditionKind, changeParallelObservation, parallelObservation } from "@/lib/programming-game/parallel-condition";
 import { GAME_MESSAGES } from "./messages";
 import { PARALLEL_MESSAGES } from "./parallel-messages";
 import "./compact-editor.css";
@@ -33,7 +34,7 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
   const nodes = countParallelNodes(program);
   const labels = parallelLabels(program);
   const name = (op: ParallelInsertOp) => op === "repeat" ? m.repeat : op === "if" ? p.if : op === "jump" ? p.jump : op === "label" ? p.label : op === "wait" ? p.wait : op === "end" ? p.end : m.actions[op];
-  const symbol = (op: ParallelInsertOp) => op in ARROWS ? ARROWS[op as keyof typeof ARROWS] : op === "repeat" ? "↻" : op === "if" ? "?" : op === "jump" ? "↷" : op === "label" ? "◆" : op === "wait" ? "Ⅱ" : "■";
+  const symbol = (op: ParallelInsertOp) => op in ARROWS ? ARROWS[op as keyof typeof ARROWS] : op === "repeat" ? "↻" : op === "if" ? "?" : op === "jump" ? "↷" : op === "label" ? "◆" : op === "wait" ? "Ⅱ" : op === "pickup" ? "↥" : op === "drop" ? "↧" : "■";
   function number(path: number[]) {
     const parts: string[] = []; let list = program;
     for (let i = 0; i < path.length; i++) {
@@ -63,7 +64,7 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
       else if (node?.op === "if") { depth++; list = parent[++i] === 0 ? node.then : node.else; }
     }
     const controls: ParallelInsertOp[] = !parent.length ? ["repeat", "if", "label", "jump"] : depth < PARALLEL_IF_DEPTH ? ["if", "jump"] : ["jump"];
-    return [...PARALLEL_ACTIONS, ...controls].filter((op) => level.allowed.includes(op));
+    return [...PARALLEL_ACTIONS, ...(level.delivery ? ["pickup", "drop"] as const : []), ...controls].filter((op) => level.allowed.includes(op));
   }
   function add(op: ParallelInsertOp, parent: number[] = []) {
     const list = getParallelEditorList(program, parent); if (!list) return;
@@ -158,18 +159,21 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
               {labels.map((id) => <option key={id} value={id}>◆ {id}</option>)}
             </select>}
             {c.op === "if" && <>
-              {c.condition.kind !== "goal" ? <span className="pg-direction-widget"><svg aria-hidden="true" className="pg-direction-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: `rotate(${{ right: 0, down: 90, left: 180, up: -90 }[c.condition.direction]}deg)` }}><path d="M4 12h15m-6-6 6 6-6 6" /></svg><select className="pg-block-select pg-direction-select" value={c.condition.direction} aria-label={`${p.direction} ${num}`} title={p.direction}
-                onChange={(e) => changeNode(path, (node) => node.op === "if" && node.condition.kind !== "goal" ? { ...node, condition: { ...node.condition, direction: e.target.value as keyof typeof ARROWS } } : node)}>
-                {Object.entries(ARROWS).map(([dir, arrow]) => <option value={dir} key={dir}>{arrow} {m.actions[dir as keyof typeof ARROWS]}</option>)}
-              </select></span> : <span className="pg-current-cell" title={p.currentCell} aria-label={p.currentCell}>◎</span>}
+              {c.condition.kind !== "holding" ? <span className="pg-direction-widget">
+                {parallelObservation(c.condition) === "current" ? <span aria-hidden="true" className="pg-current-cell">◎</span> : <svg aria-hidden="true" className="pg-direction-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: `rotate(${{ right: 0, down: 90, left: 180, up: -90 }[parallelObservation(c.condition) as keyof typeof ARROWS]}deg)` }}><path d="M4 12h15m-6-6 6 6-6 6" /></svg>}
+                <select className="pg-block-select pg-direction-select" value={parallelObservation(c.condition)} aria-label={`${p.direction} ${num}`} title={p.direction}
+                  onChange={(e) => changeNode(path, (node) => node.op === "if" ? { ...node, condition: changeParallelObservation(node.condition, e.target.value as keyof typeof ARROWS | "current") } : node)}>
+                  {(c.condition.kind === "goal" || c.condition.kind === "item") && <option value="current">◎ {p.currentCell}</option>}
+                  {Object.entries(ARROWS).map(([dir, arrow]) => <option value={dir} key={dir}>{arrow} {m.actions[dir as keyof typeof ARROWS]}</option>)}
+                </select>
+              </span> : <span className="pg-current-cell" title={p.self} aria-label={p.self}>●</span>}
               <select className="pg-block-select pg-comparison-select" value={c.condition.not ? "not" : "is"} aria-label={`${p.comparison} ${num}`} title={p.comparison}
                 onChange={(e) => changeNode(path, (node) => node.op === "if" ? { ...node, condition: { ...node.condition, not: e.target.value === "not" } } : node)}>
                 <option value="is">=</option><option value="not">≠</option>
               </select>
               <select className="pg-block-select pg-condition-select" value={c.condition.kind} aria-label={`${p.condition} ${num}`} title={p.conditions[c.condition.kind]}
-                onChange={(e) => changeNode(path, (node) => node.op === "if" ? { ...node, condition: e.target.value === "goal" ? { kind: "goal", not: node.condition.not }
-                  : { kind: e.target.value as "wall" | "boundary" | "robot", direction: node.condition.kind === "goal" ? "right" : node.condition.direction, not: node.condition.not } } : node)}>
-                {(["wall", "boundary", "robot", "goal"] as const).map((kind) => <option value={kind} key={kind}>{p.shortConditions[kind]}</option>)}
+                onChange={(e) => changeNode(path, (node) => node.op === "if" ? { ...node, condition: changeParallelConditionKind(node.condition, e.target.value as ParallelCondition["kind"]) } : node)}>
+                {(["wall", "boundary", "robot", "goal", ...(level.delivery ? ["item", "holding"] as const : [])] as const).map((kind) => <option value={kind} key={kind}>{p.shortConditions[kind]}</option>)}
               </select>
             </>}
             {nodeMenu(c, index, list, parent)}

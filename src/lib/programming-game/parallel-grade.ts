@@ -13,6 +13,7 @@ export function gradeParallelProgramming(payload: ParallelProgrammingPayload, an
     status: run.status, worldTicks: run.worldTicks, instructionAttempts: run.instructionAttempts,
     successfulMoves: run.successfulMoves, nodeCount: run.nodeCount, robots: run.robots,
     failure: run.failure, errors: run.errors, unmetRobotIds: run.unmetRobotIds,
+    ...(run.level.delivery ? { items: run.items, undeliveredItemIds: run.undeliveredItemIds } : {}),
   };
   // Reserve 10KB below the 250KB event budget for its envelope; include the server-added hash.
   if (new TextEncoder().encode(JSON.stringify({ ...feedback, levelVersion: "0".repeat(64) })).length > PARALLEL_FEEDBACK_BYTES)
