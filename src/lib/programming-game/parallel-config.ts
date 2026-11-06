@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ALL_PARALLEL_COMMANDS as PARALLEL_COMMANDS, PARALLEL_LIMITS, executeParallelProgram, parseParallelLevel, parseParallelProgram, type ParallelLevel, type ParallelProgram } from "./parallel-engine";
 import { configureParallelTemplate, type ParallelTemplateId } from "./parallel-levels";
+import { buildProgrammingTeaching, programmingTeachingSchema, type ProgrammingTeaching } from "./teaching";
 import { KNOWLEDGE_LIMITS } from "./knowledge";
 
 /** Versioned v2 course configuration, selected by the shared course adapter.
@@ -15,6 +16,7 @@ export const parallelProgrammingEditingSchema = z.object({
   task: z.string().trim().min(1).max(4000),
   allowed: z.array(z.enum(PARALLEL_COMMANDS)).min(1).max(PARALLEL_COMMANDS.length),
   hints: z.array(z.string().max(2000)).max(12),
+  teaching: programmingTeachingSchema.optional(),
   customLevel: z.custom<ParallelLevel>((v) => { try { parseParallelLevel(v); return true; } catch { return false; } }, "Invalid custom map").optional(),
   referenceProgram: z.custom<ParallelProgram>(Array.isArray, "Invalid reference program").optional(),
   knowledge: z.array(z.object({ title: z.string().max(KNOWLEDGE_LIMITS.title), body: z.string().max(KNOWLEDGE_LIMITS.body) })).max(KNOWLEDGE_LIMITS.cards),
@@ -68,6 +70,7 @@ export async function parallelProgrammingVersion(input: ParallelProgrammingPaylo
     semantics: { ...(level.delivery?.numbers ? { numbers: "integer-item-snapshot-exact-zone-v1" } : {}), ...(level.delivery ? { delivery: "current-cell-one-item-snapshot-v1" } : {}), collision: "exclusive-snapshot-retry-v1", condition: "snapshot-one-tick-v1", jump: "root-marker-one-tick-v1", controls: "root-repeat-if-actions-v1" },
     level: { ...level, allowed: [...level.allowed].sort() }, limits: PARALLEL_LIMITS,
     ...(p.customLevel ? { referenceProgram: parseParallelProgram(p.referenceProgram, level) } : {}),
+    ...(p.teaching ? { teaching: p.teaching } : {}),
     task: p.task, hints: p.hints, knowledge: p.knowledge.map((c) => ({ title: c.title, body: c.body })) };
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(snapshot)));
   return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -76,4 +79,10 @@ export async function parallelProgrammingVersion(input: ParallelProgrammingPaylo
 export function parallelProgrammingReference(input: ParallelProgrammingPayload): ParallelProgram {
   const p = parallelProgrammingEditingSchema.parse(input);
   return p.customLevel ? parseParallelProgram(p.referenceProgram, p.customLevel) : configureParallelTemplate(p.templateId, p.robotCount).reference;
+}
+
+/** Old payloads get reading aids without inserting fields or changing old hashes. */
+export function parallelProgrammingTeaching(input: ParallelProgrammingPayload, locale: "en" | "zh"): ProgrammingTeaching {
+  const p = parallelProgrammingEditingSchema.parse(input);
+  return p.teaching ?? buildProgrammingTeaching(parallelProgrammingLevel(p), parallelProgrammingReference(p), locale);
 }

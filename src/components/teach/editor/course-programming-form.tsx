@@ -2,6 +2,7 @@
 import { useId } from "react";
 import { useI18n } from "@/i18n/client";
 import { Button } from "@/components/ui/button";
+import { ProgrammingTeachingEditor } from "@/components/robot-course/ProgrammingTeachingEditor";
 import { KnowledgeEditor } from "@/components/blocks/programming-game/KnowledgeEditor";
 import { LegacyProgrammingForm } from "./programming-form";
 import { isParallelProgramming, type CourseProgrammingPayload } from "@/lib/programming-game/course-config";
@@ -11,8 +12,8 @@ import { GAME_MESSAGES } from "@/components/blocks/programming-game/messages";
 import { PARALLEL_MESSAGES } from "@/components/blocks/programming-game/parallel-messages";
 import { WORKSHOP_MESSAGES } from "@/components/blocks/programming-game/workshop-messages";
 
-export function CourseProgrammingForm({ payload, onChange, onPreset }: {
-  payload: CourseProgrammingPayload; onChange: (p: CourseProgrammingPayload) => void;
+export function CourseProgrammingForm({ payload, onChange, onPreset, hideTeaching = false }: {
+  hideTeaching?: boolean; payload: CourseProgrammingPayload; onChange: (p: CourseProgrammingPayload) => void;
   onPreset: (p: CourseProgrammingPayload, title: string) => void;
 }) {
   const { locale } = useI18n(); const id = useId(), m = GAME_MESSAGES[locale], p = PARALLEL_MESSAGES[locale], w = WORKSHOP_MESSAGES[locale];
@@ -34,6 +35,7 @@ export function CourseProgrammingForm({ payload, onChange, onPreset }: {
     {!payload.customLevel && <fieldset className="flex flex-wrap gap-3 rounded border p-3"><legend>{m.allowedLabel}</legend>{preset.level.allowed.map((op) => <label className="flex items-center gap-1 text-sm" key={op}><input type="checkbox" checked={payload.allowed.includes(op)} onChange={(e) => onChange({ ...payload, allowed: e.target.checked ? [...payload.allowed, op] : payload.allowed.filter((a) => a !== op) })} />{name(op)}</label>)}</fieldset>}
     {!valid && <p role="alert" className="text-sm text-destructive">{payload.customLevel ? (locale === "zh" ? "自定义地图或参考程序的结构无效，请到下方验证区检查。" : "The custom map or reference program has an invalid structure. Check the verification area below.") : m.allowedInvalid}</p>}
     <label className="block text-sm" htmlFor={`${id}-hints`}>{m.hintsLabel}</label><textarea id={`${id}-hints`} className="w-full rounded border bg-background p-2" rows={3} maxLength={24000} value={payload.hints.join("\n")} onChange={(e) => onChange({ ...payload, hints: e.target.value.split("\n") })} />
+    {!hideTeaching && <ProgrammingTeachingEditor payload={payload} locale={locale} onChange={onChange} />}
     <KnowledgeEditor mode="course" cards={payload.knowledge} onChange={(knowledge) => onChange({ ...payload, knowledge })} locale={locale} />
   </div>;
 }

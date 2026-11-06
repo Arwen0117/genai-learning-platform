@@ -12,6 +12,7 @@
 export const LLM_USAGES = [
   "tutor",
   "programming-hints",
+  "programming-teaching",
   "explain-block",
   "roleplay-feedback",
   "code-review",

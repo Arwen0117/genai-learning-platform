@@ -13,18 +13,24 @@ import { ParallelWarehouseBoard } from "./ParallelWarehouseBoard";
 import { CompactParallelEditor } from "./CompactParallelEditor";
 import type { ProgrammingSubmitResult } from "./ProgrammingActivity";
 import type { KnowledgeCard } from "@/lib/programming-game/knowledge";
+import { buildProgrammingTeaching, type ProgrammingTeaching } from "@/lib/programming-game/teaching";
+import { ProgrammingConcepts, ProgrammingPseudocode } from "./ProgrammingTeachingPanels";
 import { WORKSHOP_MESSAGES } from "./workshop-messages";
 import type { ParallelInsertOp } from "@/lib/programming-game/parallel-editor";
 
-type Props = { level: ParallelLevel; title: string; task: string; locale: "en" | "zh"; hints?: string[]; reference?: ParallelProgram; onNext?: () => void; course?: boolean; initialProgram?: ParallelProgram; onProgramChange?: (program: ParallelProgram) => void; onValidationResult?: (passed: boolean) => void; onLocalPassed?: () => void; knowledge?: KnowledgeCard[]; onSubmit?: (run: { attemptId: string; program: ParallelProgram }) => Promise<ProgrammingSubmitResult> };
+type Props = { teaching?: ProgrammingTeaching; level: ParallelLevel; title: string; task: string; locale: "en" | "zh"; hints?: string[]; reference?: ParallelProgram; onNext?: () => void; course?: boolean; initialProgram?: ParallelProgram; onProgramChange?: (program: ParallelProgram) => void; onValidationResult?: (passed: boolean) => void; onLocalPassed?: () => void; knowledge?: KnowledgeCard[]; onSubmit?: (run: { attemptId: string; program: ParallelProgram }) => Promise<ProgrammingSubmitResult> };
 const SELECT = "h-9 max-w-full rounded-lg border border-input bg-background px-2 text-sm";
 
 /** Shared workshop/course player; only the course wrapper supplies submission. */
 export function ParallelProgrammingGame(props: Props) {
-  return <ParallelSession key={JSON.stringify(props.level)} {...props} />;
+  let teaching = props.teaching;
+  if (!teaching && props.reference) {
+    try { teaching = buildProgrammingTeaching(props.level, props.reference, props.locale); } catch { /* Incomplete teacher drafts remain editable. */ }
+  }
+  return <ParallelSession key={JSON.stringify(props.level)} {...props} teaching={teaching} />;
 }
 
-function ParallelSession({ level, title, task, locale, hints = [], reference, onNext, course = false, knowledge = [], onSubmit, onLocalPassed, initialProgram = [], onProgramChange, onValidationResult }: Props) {
+function ParallelSession({ teaching, level, title, task, locale, hints = [], reference, onNext, course = false, knowledge = [], onSubmit, onLocalPassed, initialProgram = [], onProgramChange, onValidationResult }: Props) {
   const w = WORKSHOP_MESSAGES[locale];
   const m = GAME_MESSAGES[locale]; const p = PARALLEL_MESSAGES[locale];
   const [state, dispatch] = useReducer(parallelPlayerReducer, level, (value) => ({ ...initialParallelPlayer(value), program: initialProgram }));
@@ -102,6 +108,7 @@ function ParallelSession({ level, title, task, locale, hints = [], reference, on
   return <fieldset disabled={busy} className="pg-player min-w-0 space-y-4" aria-label={p.parallel}>
     <div className="space-y-1"><h2 className="text-xl font-semibold">{title}</h2><p>{task}</p>
 </div>
+    <ProgrammingConcepts teaching={teaching} locale={locale} />
     <div className="pg-parallel-workspace pg-game-stage">
     <div className="pg-game-scene min-w-0 space-y-4">
     <ParallelWarehouseBoard level={level} robots={robots} selectedId={selected.id} onSelect={select} items={items} passed={execution?.status === "passed"} locale={locale} />
@@ -164,6 +171,7 @@ function ParallelSession({ level, title, task, locale, hints = [], reference, on
     {state.inputError && <p role="alert" className="text-sm text-destructive">{p.errors[state.inputError] ?? state.inputError}</p>}
     </div>
     </div>
+    <ProgrammingPseudocode key={JSON.stringify(teaching)} teaching={teaching} locale={locale} />
     {!course && <div className="pg-level-footer"><span>{execution?.status === "passed" ? (onNext ? m.passed : w.done) : w.locked}</span>{onNext && <Button type="button" disabled={execution?.status !== "passed"} onClick={onNext}>{w.next} <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 12h15m-6-6 6 6-6 6" /></svg></Button>}</div>}
     <details className="pg-workshop-help"><summary>{p.helpTitle}</summary><div className="space-y-1 text-xs text-muted-foreground"><p>{p.help}</p><p>{course ? m.serverNote : p.note}</p><p>{p.goal}</p><p>{m.resetNote}</p><p>{p.concurrent}</p>{level.delivery && <p>{p.itemHelp}</p>}{level.delivery?.numbers && <p>{p.numericHelp}</p>}<p>{p.pausedOnHide}</p><p>{p.limits}</p>{level.allowed.includes("if") && <p>{p.ifNote}</p>}</div></details>
     {knowledge.length > 0 && <section aria-label={m.knowledgeHeading} className="space-y-2"><h3 className="font-semibold">{m.knowledgeHeading}</h3>{knowledge.map((c, i) => <details key={i} className="rounded border p-3"><summary>{c.title}</summary><p className="whitespace-pre-wrap text-sm">{c.body}</p></details>)}</section>}
