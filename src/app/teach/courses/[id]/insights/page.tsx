@@ -4,6 +4,7 @@ import {
   BarChart3,
   CalendarCheck,
   Gauge,
+  MessageSquareWarning,
   Pencil,
   Trophy,
   Users,
@@ -27,7 +28,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getI18n } from "@/i18n/server";
 import { auth } from "@/lib/auth";
 import { completionPercent } from "@/lib/students";
-import { loadCourseInsights } from "@/lib/insights";
+import {
+  FEEDBACK_REASON_KEYS,
+  FEEDBACK_REASONS,
+  isFeedbackReason,
+} from "@/lib/feedback";
+import { loadCourseInsights, loadLessonFeedback } from "@/lib/insights";
 import { EDITOR_STATUS_KEYS } from "@/lib/teach-editor";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +67,11 @@ function StatCard({
       <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
     </div>
   );
+}
+
+/** The latest note is free text; the dashboard shows a preview, not the essay. */
+function clipNote(note: string, max = 120): string {
+  return note.length > max ? `${note.slice(0, max).trimEnd()}…` : note;
 }
 
 /** Decorative empty state; drawn inline so it follows the page's spacing. */
@@ -124,9 +135,16 @@ async function InsightsContent({ params }: InsightsPageProps) {
 
   const insights = await loadCourseInsights(id);
 
-  if (insights === null || insights.course.createdById !== user.id) {
+  // The course author owns the dashboard; an admin may audit any course. Anyone
+  // else who guesses the id gets the same 404 as a missing course.
+  if (
+    insights === null ||
+    (insights.course.createdById !== user.id && user.role !== "ADMIN")
+  ) {
     notFound();
   }
+
+  const lessonFeedback = await loadLessonFeedback({ courseId: id });
 
   const { course, students } = insights;
   const isPublished = course.status === "PUBLISHED";
@@ -360,6 +378,68 @@ async function InsightsContent({ params }: InsightsPageProps) {
                   seriesLabel={t("insights.lessons.series")}
                 />
               </div>
+            )}
+          </section>
+
+          <section
+            aria-labelledby="feedback-heading"
+            className="rounded-xl px-4 py-4 ring-1 ring-foreground/10"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2
+                className="flex items-center gap-1.5 text-sm font-medium"
+                id="feedback-heading"
+              >
+                <MessageSquareWarning
+                  aria-hidden="true"
+                  className="size-4 text-muted-foreground"
+                />
+                {t("insights.feedback.title")}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {t("insights.feedback.hint")}
+              </p>
+            </div>
+
+            {lessonFeedback.length === 0 ? (
+              <p className="mt-8 text-center text-xs text-muted-foreground">
+                {t("insights.feedback.empty")}
+              </p>
+            ) : (
+              <ul className="mt-3 divide-y divide-border">
+                {lessonFeedback.map((row) => (
+                  <li className="space-y-2 py-3" key={row.lessonId}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="text-sm font-medium">{row.lessonTitle}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t("insights.feedback.total", { count: row.total })}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {FEEDBACK_REASONS.map((reason) => (
+                        <Badge
+                          key={reason}
+                          variant={row.counts[reason] > 0 ? "secondary" : "outline"}
+                        >
+                          {t(FEEDBACK_REASON_KEYS[reason])} · {row.counts[reason]}
+                        </Badge>
+                      ))}
+                    </div>
+
+                    {row.latestNote === null ? null : (
+                      <p className="text-xs text-muted-foreground">
+                        {t("insights.feedback.latest", {
+                          reason: isFeedbackReason(row.latestNote.reason)
+                            ? t(FEEDBACK_REASON_KEYS[row.latestNote.reason])
+                            : row.latestNote.reason,
+                          note: clipNote(row.latestNote.note),
+                        })}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
 
