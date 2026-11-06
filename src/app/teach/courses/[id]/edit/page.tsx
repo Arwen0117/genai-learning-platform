@@ -1,3 +1,4 @@
+import { isRobotCourse } from "@/lib/programming-game/robot-course";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -50,6 +51,7 @@ async function EditCourseContent({ params }: EditCoursePageProps) {
     notFound();
   }
 
+  if (isRobotCourse(course)) redirect(`/teach/programming-game/${course.id}`);
   return <CourseEditor course={course} />;
 }
 

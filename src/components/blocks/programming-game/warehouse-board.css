@@ -1,0 +1,303 @@
+/* Scoped to the programming game; no application-wide theme overrides. */
+.pg-warehouse {
+  --pg-tile: 64px;
+  overflow: hidden;
+  border: 1px solid #9ccdd9;
+  border-radius: 18px;
+  color: #173d52;
+  background: #e7f5f9;
+  box-shadow: 0 8px 24px #164e6310;
+}
+.pg-warehouse-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #b7dce6;
+  background: linear-gradient(100deg, #eaf9fd, #d5f0f4);
+}
+.pg-warehouse-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.pg-warehouse-badge {
+  border: 1px solid #b2d4de;
+  border-radius: 6px;
+  padding: 3px 6px;
+  color: #39697b;
+  background: #ffffff90;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+}
+.pg-warehouse-scroll {
+  overflow-x: auto;
+  outline-offset: -3px;
+}
+.pg-warehouse-stage {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  justify-content: center;
+  padding: 30px 24px 34px;
+  background-color: #c8e8f0;
+  background-image:
+    radial-gradient(ellipse at top, #f1fcffbb, transparent 70%),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 35px,
+      #8cbcc21a 36px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 35px,
+      #8cbcc21a 36px
+    );
+}
+.pg-warehouse-grid {
+  position: relative;
+  flex: none;
+}
+.pg-warehouse-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.pg-warehouse-row:last-child {
+  margin-bottom: 0;
+}
+.pg-warehouse-tile {
+  position: relative;
+  display: flex;
+  width: var(--pg-tile);
+  height: var(--pg-tile);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #a1c8d0;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #f7fcfe, #dceff3);
+  box-shadow:
+    0 4px 0 #91bdc7,
+    inset 0 1px 0 #fff;
+}
+.pg-tile-coordinate {
+  position: absolute;
+  bottom: 3px;
+  left: 5px;
+  font-size: 8px;
+  line-height: 1;
+  color: #497686;
+  font-family: ui-monospace, monospace;
+}
+.pg-tile-wall {
+  border-color: #7497b4;
+  background: repeating-linear-gradient(
+    135deg,
+    #95b2c7 0,
+    #95b2c7 6px,
+    #aac2d4 6px,
+    #aac2d4 12px
+  );
+  box-shadow: 0 4px 0 #627e96;
+}
+.pg-obstacle {
+  display: flex;
+  width: 45px;
+  height: 45px;
+  padding: 5px;
+  align-items: center;
+  justify-content: center;
+  color: #314f6b;
+  border: 1px solid #537593;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #dce5ef, #a8bed2);
+  box-shadow: 0 3px 0 #5f7c96;
+}
+.pg-obstacle svg {
+  width: 34px;
+  height: 34px;
+}
+.pg-tile-goal {
+  border: 2px solid #299a77;
+  background: repeating-linear-gradient(
+    135deg,
+    #b8ead5 0,
+    #b8ead5 6px,
+    #d9f7e7 6px,
+    #d9f7e7 12px
+  );
+  box-shadow:
+    0 4px 0 #55a88d,
+    inset 0 0 0 5px #ffffff70;
+}
+.pg-goal-marker {
+  position: absolute;
+  top: 4px;
+  right: 3px;
+  color: #15684f;
+}
+.pg-tile-complete {
+  outline: 3px solid #38b78f;
+  outline-offset: 2px;
+}
+.pg-parcel {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  padding: 4px;
+  color: #80420b;
+  border: 1px solid #ca790d;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ffe0a0, #ffb743);
+  box-shadow: 0 3px 0 #bc761d;
+}
+.pg-parcel svg {
+  width: 100%;
+  height: 100%;
+}
+.pg-parcel-shared {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 23px;
+  height: 23px;
+  padding: 2px;
+  z-index: 3;
+}
+.pg-robot-position {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: var(--pg-tile);
+  height: var(--pg-tile);
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: transform 160ms ease-out;
+  z-index: 2;
+}
+.pg-robot-shell {
+  display: flex;
+  width: 46px;
+  height: 46px;
+  padding: 5px;
+  color: #fff;
+  border: 2px solid #225bcb;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #64b3ff, #336ee7);
+  box-shadow:
+    0 4px 0 #214f9e,
+    0 6px 10px #18489b35,
+    inset 0 1px 0 #b3d9ff;
+}
+.pg-robot-shell > svg {
+  width: 100%;
+  height: 100%;
+}
+.pg-robot-cargo {
+  position: absolute;
+  right: 0;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  color: #793c07;
+  background: #ffd282;
+  border: 1px solid #c17b18;
+  border-radius: 7px;
+  box-shadow: 0 2px 0 #b96d11;
+}
+.pg-robot-alert {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 23px;
+  height: 23px;
+  color: #9c2525;
+  border: 1px solid #ef9d8e;
+  border-radius: 50%;
+  background: #fff1eb;
+}
+.pg-robot-error .pg-robot-shell {
+  border-color: #ab424d;
+  background: linear-gradient(145deg, #e78c9b, #bd495e);
+  box-shadow: 0 4px 0 #8f3041;
+}
+.pg-warehouse-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 12px 16px;
+  border-top: 1px solid #b7dce6;
+  background: #f3fbfe;
+  font-size: 12px;
+}
+.pg-warehouse-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.pg-legend-robot {
+  color: #2458b8;
+}
+.pg-legend-parcel {
+  color: #8c4d0c;
+}
+.pg-legend-goal {
+  color: #126346;
+}
+.pg-legend-wall {
+  color: #3c5a74;
+}
+.dark .pg-warehouse {
+  border-color: #35627b;
+  background: #17394b;
+  color: #e2f3fa;
+}
+.dark .pg-warehouse-header {
+  border-color: #3a6479;
+  background: linear-gradient(100deg, #18394d, #214e60);
+}
+.dark .pg-warehouse-badge {
+  color: #d4ecf7;
+  border-color: #527a8e;
+  background: #14384b;
+}
+.dark .pg-warehouse-stage {
+  background-color: #244d60;
+}
+.dark .pg-warehouse-legend {
+  border-color: #3a6479;
+  background: #153649;
+}
+.dark .pg-legend-robot {
+  color: #9ccaff;
+}
+.dark .pg-legend-parcel {
+  color: #ffd18c;
+}
+.dark .pg-legend-goal {
+  color: #91e5bf;
+}
+.dark .pg-legend-wall {
+  color: #c4d7e8;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pg-robot-position {
+    transition: none;
+  }
+}

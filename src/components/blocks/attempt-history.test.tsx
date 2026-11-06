@@ -99,3 +99,19 @@ describe("AttemptHistory learner behavior", () => {
     expect(screen.getByText("Playthrough response 2")).toBeTruthy();
   });
 });
+
+describe("robot history compatibility", () => {
+ afterEach(() => cleanup());
+ it("keeps robot numeric scores and structured history alongside qualitative Game Activity history", async () => {
+  const { createParallelProgrammingPayload, parallelProgrammingLevel, parallelProgrammingReference } = await import("@/lib/programming-game/parallel-config");
+  const { gradeParallelProgramming } = await import("@/lib/programming-game/parallel-grade");
+  const { loadActivityAttempts } = await import("@/server/activities");
+  const payload = createParallelProgrammingPayload("parallel-lanes", "en"), program = parallelProgrammingReference(payload);
+  const grade = gradeParallelProgramming(payload, { program });
+  vi.mocked(loadActivityAttempts).mockResolvedValueOnce({ ok: true, attempts: [{ id: "robot-attempt", createdAt: "2026-01-01T00:00:00.000Z", result: { version: 1, activityType: "game", answer: { program }, ...grade, feedback: { ...grade.feedback, levelVersion: "0".repeat(64), levelSnapshot: parallelProgrammingLevel(payload) } } }], nextCursor: null });
+  render(<I18nProvider locale="en" messages={en}><AttemptHistory lessonId="l" blockId="robot" /></I18nProvider>);
+  fireEvent.click(screen.getByRole("button", { name: /submission history/i }));
+  await waitFor(() => expect(screen.getByText(/100% \(100\/100\)/)).toBeTruthy());
+  expect(screen.getByText(/SHA-256/)).toBeTruthy();
+ });
+});

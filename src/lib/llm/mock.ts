@@ -11,6 +11,8 @@
 /** Generation purposes used across the platform. */
 export const LLM_USAGES = [
   "tutor",
+  "programming-hints",
+  "programming-teaching",
   "explain-block",
   "roleplay-feedback",
   "code-review",

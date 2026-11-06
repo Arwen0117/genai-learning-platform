@@ -17,7 +17,7 @@ function storedBlocks(lesson: {
   if (!activity.success) return blocks;
   // Challenges live only in the Game Activity container once it exists.
   return [
-    ...blocks.filter((block) => block.type !== "game"),
+    ...blocks.filter((block) => block.type !== "game" || block.payload.variant === "programming"),
     ...activity.data.challenges,
   ];
 }

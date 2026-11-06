@@ -3,6 +3,7 @@
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+import { CourseProgrammingForm } from "./course-programming-form";
 import { MarkdownView } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1216,7 +1217,12 @@ function CodingForm({ block, onChange }: FormProps<"coding">) {
   );
 }
 
-function GameForm({ block, onChange }: FormProps<"game">) {
+function GameForm(props: FormProps<"game">) {
+  if (props.block.payload.variant === "programming") return <CourseProgrammingForm payload={props.block.payload} onChange={(payload) => props.onChange({ ...props.block, payload })} onPreset={(payload, title) => props.onChange({ ...props.block, title, payload })} />;
+  return <ChallengeGameForm {...props} block={{ ...props.block, payload: props.block.payload }} />;
+}
+
+function ChallengeGameForm({ block, onChange }: { block: import("@/lib/blocks/schema").GameChallengeBlock; onChange: FormProps<"game">["onChange"] }) {
   const t = useT();
   const payload = block.payload;
   const feedback = payload.feedback ?? { correct: "", incorrect: "" };

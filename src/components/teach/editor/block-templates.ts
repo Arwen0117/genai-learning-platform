@@ -1,9 +1,11 @@
+import { gameChallengeBlockSchema } from "@/lib/blocks/schema";
 import type { Locale } from "@/i18n/config";
 import type { GameActivityContainer } from "@/lib/game-activity";
 import type {
   Block,
   BlockType,
-  GameBlock,
+  GameChallengeBlock as GameBlock,
+  GameBlock as LegacyGameBlock,
   SimulationBlock,
   SortItem,
 } from "@/lib/blocks/schema";
@@ -385,10 +387,10 @@ export function createGameActivity(
   options?: {
     id?: string;
     title?: string;
-    seedChallenges?: readonly GameBlock[];
+    seedChallenges?: readonly LegacyGameBlock[];
   },
 ): GameActivityContainer {
-  const challenges: GameBlock[] = [...(options?.seedChallenges ?? [])];
+  const challenges: GameBlock[] = (options?.seedChallenges ?? []).map((block) => gameChallengeBlockSchema.parse(block));
   while (challenges.length < GAME_ACTIVITY_CHALLENGE_COUNT) {
     challenges.push(createBlock("game", locale) as GameBlock);
   }

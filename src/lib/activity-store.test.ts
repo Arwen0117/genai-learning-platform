@@ -358,3 +358,61 @@ describe("atomic activity persistence", () => {
     expect(m.create.mock.calls[0][0].data.result.firstPass).toBe(true);
   });
 });
+
+// New variant must keep the same atomic completion and event guarantees.
+describe("programming attempt events", () => {
+  it("records an unsuccessful programming run without completing its block", async () => {
+    const { createProgrammingPayload } = await import("./programming-game/config");
+    const game: Block = { ...block, type: "game", payload: createProgrammingPayload("first-route", "en") };
+    m.list.mockResolvedValue([{ blockId: "g", result: { score: { normalized: 0 } } }]);
+    await persistActivity({ ...input, block: game, blocks: [game], grade: {
+      ...input.grade, completed: false, passed: false,
+      score: { raw: 0, min: 0, max: 100, normalized: 0 }, feedback: { variant: "programming", status: "error" },
+    } });
+    expect(m.upsert.mock.calls[0][0].update.completedBlocks).toEqual([]);
+    expect(m.event.mock.calls.map((c) => c[0].data.type)).toEqual(["GAME_ATTEMPT"]);
+    expect(m.event.mock.calls[0][0].data.payload.variant).toBe("programming");
+  });
+  it("keeps an earlier completion when a later programming run fails", async () => {
+    const { createProgrammingPayload } = await import("./programming-game/config");
+    const game: Block = { ...block, type: "game", payload: createProgrammingPayload("first-route", "en") };
+    m.progress.mockResolvedValue({ completedBlocks: ["g"] });
+    m.list.mockResolvedValue([{ blockId: "g", result: { score: { normalized: 0 } } }]);
+    await persistActivity({ ...input, block: game, blocks: [game], grade: { ...input.grade, completed: false, passed: false, feedback: { variant: "programming" } } });
+    expect(m.upsert.mock.calls[0][0].update.completedBlocks).toEqual(["g"]);
+    expect(m.event.mock.calls.map((c) => c[0].data.type)).toEqual(["GAME_ATTEMPT"]);
+  });
+});
+
+describe("v2 persistence boundary", () => {
+  it("deduplicates simultaneous same-ID attempts after a unique-constraint retry", async () => {
+    const { createParallelProgrammingPayload } = await import("./programming-game/parallel-config");
+    const { gradeActivity } = await import("./blocks/activity-result");
+    const game: Block = { ...block, payload: createParallelProgrammingPayload("parallel-lanes", "en") };
+    const answer = { program: [{ op: "repeat", count: 4, body: [{ op: "right" }] }] };
+    const request = { ...input, block: game, blocks: [game], answer, grade: gradeActivity(game, answer) };
+    let saved: { id: string; result: unknown } | null = null;
+    m.find.mockImplementation(async () => saved);
+    m.create.mockImplementation(async ({ data }) => {
+      if (saved) throw new Prisma.PrismaClientKnownRequestError("duplicate", { code: "P2002", clientVersion: "6" });
+      saved = { id: "v2-winner", result: data.result }; return saved;
+    });
+    const results = await Promise.all([persistActivity(request), persistActivity(request)]);
+    expect(results.map((r) => r.id)).toEqual(["v2-winner", "v2-winner"]);
+    expect(m.upsert).toHaveBeenCalledOnce();
+    expect(m.event.mock.calls.map((c) => c[0].data.type)).toEqual(["GAME_FINISH", "BLOCK_COMPLETE"]);
+    expect(m.create.mock.calls[0][0].data.result).toMatchObject({ version: 1, feedback: { feedbackVersion: 2 }, activitySnapshot: game });
+  });
+  it("does not revoke an earlier v2 completion after a new failed attempt", async () => {
+    const { createParallelProgrammingPayload } = await import("./programming-game/parallel-config");
+    const { gradeActivity } = await import("./blocks/activity-result");
+    const game: Block = { ...block, payload: createParallelProgrammingPayload("parallel-lanes", "en") };
+    const answer = { program: [{ op: "left" }] };
+    m.progress.mockResolvedValue({ completedBlocks: ["g"] });
+    m.list.mockResolvedValue([{ blockId: "g", result: { score: { normalized: 0 } } }]);
+    await persistActivity({ ...input, block: game, blocks: [game], answer, grade: gradeActivity(game, answer) });
+    expect(m.upsert.mock.calls[0][0].update.completedBlocks).toEqual(["g"]);
+    expect(m.upsert.mock.calls[0][0].update.score).toBe(0);
+    expect(m.event.mock.calls.map((c) => c[0].data.type)).toEqual(["GAME_ATTEMPT"]);
+  });
+});

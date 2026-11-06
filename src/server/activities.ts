@@ -10,6 +10,10 @@ import {
   activitySubmissionSchema,
   gradeActivity,
 } from "@/lib/blocks/activity-result";
+import { courseProgrammingVersion, isParallelProgramming } from "@/lib/programming-game/course-config";
+import { parallelProgrammingLevel } from "@/lib/programming-game/parallel-config";
+import { parseParallelProgram } from "@/lib/programming-game/parallel-engine";
+import type { ActivityGrade } from "@/lib/blocks/activity-result";
 import { prisma } from "@/lib/prisma";
 
 export async function submitActivity(
@@ -26,25 +30,36 @@ export async function submitActivity(
     // A teacher preview is read-only: never create ActivityAttempt or
     // LessonProgress rows while the teacher is looking at the course.
     if (access.preview) return { ok: true as const, id: null };
-    const grade =
-      parsed.feedback.kind === "hint" || parsed.answer.kind === "replay"
-        ? {
-            score: null,
-            completed: false,
-            passed: null,
-            verification: "ungraded" as const,
-            feedback: parsed.feedback,
-          }
-        : gradeActivity(access.block, parsed.answer);
+    // Authorization precedes deduplication. A saved retry returns its original
+    // grade even when the teacher has subsequently changed the level.
+    const programming = access.block.type === "game" && access.block.payload.variant === "programming";
+    const existing = programming ? await prisma.activityAttempt.findUnique({
+      where: { userId_lessonId_blockId_attemptId: {
+        userId: access.userId, lessonId, blockId, attemptId: parsed.attemptId,
+      } },
+    }) : null;
+    if (existing) return { ok: true as const, id: existing.id, grade: savedGrade(existing.result) };
+    if (access.block.type === "game" && access.block.payload.variant === "programming") {
+      const version = await courseProgrammingVersion(access.block.payload);
+      if (parsed.answer.levelVersion !== version)
+        return { ok: false as const, code: "LEVEL_CHANGED" as const, error: "Level updated. Reload before submitting; keep a copy of your program." };
+    }
+    const grade = !programming && (parsed.feedback.kind === "hint" || parsed.answer.kind === "replay")
+      ? { score: null, completed: false, passed: null, verification: "ungraded" as const, feedback: parsed.feedback }
+      : gradeActivity(access.block, parsed.answer);
+    if (programming) grade.feedback.levelVersion = parsed.answer.levelVersion;
+    const answer = access.block.type === "game" && access.block.payload.variant === "programming" && isParallelProgramming(access.block.payload)
+      ? { program: parseParallelProgram(parsed.answer.program, parallelProgrammingLevel(access.block.payload)), levelVersion: parsed.answer.levelVersion }
+      : parsed.answer;
     const attempt = await persistActivity({
       ...access,
       courseId: access.courseId!,
       lessonId,
       attemptId: parsed.attemptId,
-      answer: parsed.answer,
+      answer,
       grade,
     });
-    return { ok: true as const, id: attempt.id };
+    return programming ? { ok: true as const, id: attempt.id, grade: savedGrade(attempt.result) } : { ok: true as const, id: attempt.id };
   } catch (cause) {
     return {
       ok: false as const,
@@ -194,4 +209,10 @@ export async function loadLatestGamePlaythrough(
           cause instanceof Error ? cause.message : "Cannot recover game state.",
       };
     }
+}
+
+/** Only expose the stored grade; identity and snapshot remain in private history. */
+function savedGrade(result: unknown): ActivityGrade {
+  const r = result as ActivityGrade;
+  return { score: r.score, completed: r.completed, passed: r.passed, verification: r.verification, feedback: r.feedback };
 }

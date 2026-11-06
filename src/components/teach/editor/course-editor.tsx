@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { Block, BlockType, GameBlock } from "@/lib/blocks/schema";
+import type { Block, BlockType, GameChallengeBlock as GameBlock } from "@/lib/blocks/schema";
 import type { GameActivityContainer } from "@/lib/game-activity";
 import {
   AUDIENCE_SUGGESTIONS,
@@ -189,7 +189,7 @@ function replaceBlock(course: EditorCourse, next: Block): EditorCourse {
 
 function replaceGameChallenge(
   course: EditorCourse,
-  next: Extract<Block, { type: "game" }>,
+  next: GameBlock,
 ): EditorCourse {
   return {
     ...course,
@@ -635,7 +635,7 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
           }
 
           const legacyGames = lesson.blocks.filter(
-            (block): block is GameBlock => block.type === "game",
+            (block): block is GameBlock => block.type === "game" && block.payload.variant !== "programming",
           );
           const activity = createGameActivity(locale, {
             title: lesson.title,
@@ -644,7 +644,7 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
 
           return {
             ...lesson,
-            blocks: lesson.blocks.filter((block) => block.type !== "game"),
+            blocks: lesson.blocks.filter((block) => block.type !== "game" || block.payload.variant === "programming"),
             gameActivity: activity,
           };
         }),
@@ -1258,11 +1258,11 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
           }
           onChange={(next) => {
             commit((previous) =>
-              next.type === "game" &&
+              next.type === "game" && next.payload.variant !== "programming" &&
               selectedLesson?.gameActivity?.challenges.some(
                 (challenge) => challenge.id === next.id,
               )
-                ? replaceGameChallenge(previous, next)
+                ? replaceGameChallenge(previous, { ...next, payload: next.payload })
                 : replaceBlock(previous, next),
             );
           }}
@@ -1286,7 +1286,7 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
                   const context = lessonGenerateContext({
                     title: selectedLesson.title,
                     blocks: selectedLesson.blocks.filter(
-                      (block) => block.type !== "game",
+                      (block) => block.type !== "game" || block.payload.variant === "programming",
                     ),
                   });
                   return generateGameActivity(context);

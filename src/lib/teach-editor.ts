@@ -185,7 +185,7 @@ export const editorCourseSchema = z
             gameActivity: lesson.gameActivity,
           });
           const leftoverGames = normalized.blocks.filter(
-            (block) => block.type === "game",
+            (block) => block.type === "game" && block.payload.variant !== "programming",
           );
           if (leftoverGames.length > 0) {
             ctx.addIssue({

@@ -79,6 +79,7 @@ async function TeachContent({ searchParams }: TeachPageProps) {
           <Sparkles aria-hidden="true" />
           {t("teach.newCourse")}
         </Link>
+        <Link className={buttonVariants({ variant: "outline" })} href="/teach/programming-game/new">{locale === "zh" ? "新建机器人游戏课程" : "New robot game course"}</Link>
       </header>
 
       {created.length === 0 ? null : (

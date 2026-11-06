@@ -1,13 +1,13 @@
 import { z } from "zod";
 
 import {
-  gameBlockSchema,
+  gameChallengeBlockSchema,
   type Block,
-  type GameBlock,
+  type GameChallengeBlock,
 } from "@/lib/blocks/schema";
 import type { ContentLanguage } from "@/lib/llm/language";
 
-export const gameChallengeSchema = gameBlockSchema.superRefine((block, ctx) => {
+export const gameChallengeSchema = gameChallengeBlockSchema.superRefine((block, ctx) => {
   if (block.payload.feedback === undefined) {
     ctx.addIssue({
       code: "custom",
@@ -57,13 +57,13 @@ export function normalizeLessonGameActivity(input: {
     : null;
   if (existing?.success) {
     return {
-      blocks: input.blocks.filter((block) => block.type !== "game"),
+      blocks: input.blocks.filter((block) => block.type !== "game" || block.payload.variant === "programming"),
       gameActivity: existing.data,
     };
   }
 
   const legacyChallenges = input.blocks.filter(
-    (block): block is GameBlock => block.type === "game",
+    (block): block is GameChallengeBlock => block.type === "game" && block.payload.variant !== "programming",
   );
   if (legacyChallenges.length !== 5) {
     return {
@@ -82,7 +82,7 @@ export function normalizeLessonGameActivity(input: {
   }
 
   return {
-    blocks: input.blocks.filter((block) => block.type !== "game"),
+    blocks: input.blocks.filter((block) => block.type !== "game" || block.payload.variant === "programming"),
     gameActivity: migrated.data,
   };
 }
@@ -112,7 +112,7 @@ function localeText(value: string): string {
     .replace(technicalIdentifier, " ");
 }
 
-function stringsFor(block: GameBlock): string[] {
+function stringsFor(block: GameChallengeBlock): string[] {
   const payload = block.payload;
   const mediaText =
     payload.supportingMedia?.decorative === true

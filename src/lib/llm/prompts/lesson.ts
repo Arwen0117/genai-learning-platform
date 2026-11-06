@@ -40,6 +40,10 @@ export const generatedLessonSchema = z
     gameActivity: gameActivityContainerSchema.optional(),
   })
   .superRefine((lesson, ctx) => {
+    lesson.blocks.forEach((block, index) => {
+      if (block.type === "game" && block.payload.variant === "programming")
+        ctx.addIssue({ code: "custom", path: ["blocks", index], message: "Programming games are teacher-authored only; generate sort or match instead." });
+    });
     const ids = lesson.blocks.map((block) => block.id);
     if (new Set(ids).size !== ids.length) {
       ctx.addIssue({

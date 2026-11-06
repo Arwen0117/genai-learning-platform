@@ -161,10 +161,8 @@ export async function persistActivity(input: {
               previous.playthroughId === playthroughId
             );
           });
-          const isSignal =
-            answer.kind === "hint" ||
-            answer.kind === "replay" ||
-            grade.feedback.kind === "hint";
+          const isProgramming = block.type === "game" && block.payload.variant === "programming";
+          const isSignal = !isProgramming && (answer.kind === "hint" || answer.kind === "replay" || grade.feedback.kind === "hint");
           const attempted = !isSignal;
           const result = {
             version: 1,

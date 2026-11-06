@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type {
   BlockRenderProps,
   GameBlock as GameBlockData,
+  GameChallengeBlock,
 } from "@/lib/blocks/schema";
 import { useT } from "@/i18n/client";
 import { CHALLENGE_MAX_ANIMATION_SECONDS } from "@/lib/supporting-media-duration";
@@ -12,6 +13,7 @@ import { loadLatestGamePlaythrough } from "@/server/activities";
 import { ChooseGame } from "./ChooseGame";
 import { MatchGame } from "./MatchGame";
 import { SortGame } from "./SortGame";
+import { ProgrammingActivity } from "./programming-game/ProgrammingActivity";
 import { SupportingMediaView } from "./SupportingMediaView";
 
 export type GameRecovery = {
@@ -26,13 +28,19 @@ export type GameRecovery = {
  * belong to and how a finished run is recorded — and hands the puzzle itself
  * down as plain data.
  */
-export function GameBlock({
+export function GameBlock(props: BlockRenderProps<GameBlockData>) {
+  const { block, context } = props;
+  if (block.payload.variant === "programming") return <ProgrammingActivity payload={block.payload} title={block.title} blockId={block.id} lessonId={context.lessonId} preview={context.preview === true} />;
+  return <ChallengeGameBlock {...props} block={{ ...block, payload: block.payload }} />;
+}
+
+function ChallengeGameBlock({
   block,
   completed,
   onAttempt,
   onComplete,
   context,
-}: BlockRenderProps<GameBlockData>) {
+}: BlockRenderProps<GameChallengeBlock>) {
   const { payload } = block;
   const t = useT();
   const [recoveryReady, setRecoveryReady] = useState(context.preview === true);

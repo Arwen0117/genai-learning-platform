@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ProgrammingAttemptSummary } from "./programming-game/ProgrammingAttemptSummary";
 import { useT } from "@/i18n/client";
 import { loadActivityAttempts } from "@/server/activities";
 type Row = { id: string; createdAt: string; result: unknown };
@@ -64,9 +65,10 @@ export function AttemptHistory({
           activityType?: string;
           attemptNumber?: number;
           answer?: unknown;
-          feedback?: { correction?: unknown; kind?: unknown };
+          feedback?: { correction?: unknown; kind?: unknown; variant?: unknown };
         };
-        const isGameActivity = result.activityType === "game";
+        const isProgramming = result.feedback?.variant === "programming";
+        const isGameActivity = result.activityType === "game" && !isProgramming;
         const status = result.completed
           ? t("common.completed")
           : t("activity.attempt");
@@ -83,7 +85,7 @@ export function AttemptHistory({
                 : t("activity.ungraded")}{" "}
               {isGameActivity ? null : `· ${status}`}
             </summary>
-            {isGameActivity ? (
+            {isProgramming ? <ProgrammingAttemptSummary result={row.result} /> : isGameActivity ? (
               <div className="mt-2 space-y-1 text-muted-foreground">
                 {typeof result.attemptNumber === "number" ? (
                   <p>

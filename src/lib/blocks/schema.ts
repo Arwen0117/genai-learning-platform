@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { courseProgrammingPayloadSchema } from "@/lib/programming-game/course-config";
 
 import { MOTION_PATTERN_IDS } from "@/lib/simulation-motion";
 import {
@@ -330,10 +331,11 @@ const chooseGamePayloadSchema = z
 export const gameBlockSchema = blockBaseSchema
   .extend({
     type: z.literal("game"),
-    payload: z.discriminatedUnion("variant", [
+    payload: z.union([
       sortGamePayloadSchema,
       matchGamePayloadSchema,
       chooseGamePayloadSchema,
+      courseProgrammingPayloadSchema,
     ]),
   })
   .refine(
@@ -344,10 +346,18 @@ export const gameBlockSchema = blockBaseSchema
     { message: "Sort items must all carry a distinct order value." },
   )
   .superRefine((block, ctx) => {
+    if (block.payload.variant === "programming") return;
     const media = block.payload.supportingMedia;
     if (media === undefined) return;
     addSupportingMediaIssues(media, ctx, ["payload", "supportingMedia"]);
   });
+
+/** Game Activity containers support these three formats; programming courses
+ * keep their own progression, grading and configuration boundary. */
+export const gameChallengeBlockSchema = gameBlockSchema.safeExtend({
+  payload: z.discriminatedUnion("variant", [sortGamePayloadSchema, matchGamePayloadSchema, chooseGamePayloadSchema]),
+});
+export type GameChallengeBlock = z.infer<typeof gameChallengeBlockSchema>;
 
 /** One choice offered by a simulation node. */
 export const simulationOptionSchema = z.object({
