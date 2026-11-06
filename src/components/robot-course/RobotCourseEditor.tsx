@@ -13,6 +13,7 @@ import { referenceSignature } from "./ReferenceProgramRunner";
 import { ProgrammingTeachingEditor } from "./ProgrammingTeachingEditor";
 import { RobotLevelDesigner } from "./RobotLevelDesigner";
 import { RobotCourseScreen } from "./RobotCourseScreen";
+import { RobotCourseTransfer } from "./RobotCourseTransfer";
 import { ROBOT_MESSAGES } from "./messages";
 
 type SaveResult = { ok: true; courseId: string; updatedAt: string } | { ok: false; error: string };
@@ -63,6 +64,11 @@ export function RobotCourseEditor({ courseId: initialCourseId = null, initial }:
     } catch (e) { if (mounted.current) setNotice(e instanceof Error ? e.message : w.failed); } finally { generatingNow.current = false; if (mounted.current) setGenerating(false); }
   }
   return <div className="space-y-5"><h1 className="text-2xl font-semibold">{w.edit}</h1><fieldset disabled={busy} className="min-w-0 space-y-4 rounded-xl border p-4">
+    <RobotCourseTransfer draft={draft} locale={locale} onImport={(imported) => {
+      latest.current = ""; setDraft(imported); setCourseId(null); setActive(0); setChecks({});
+      setGenerated(null); setStudentPreview(false); setNotice("");
+      window.history.replaceState(null, "", "/teach/programming-game/new");
+    }} />
     <label className="block">{w.name}<input className="mt-1 block w-full rounded border bg-background p-2" aria-label={w.name} maxLength={90} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></label>
     <label className="block">{w.description}<textarea className="mt-1 block w-full rounded border bg-background p-2" aria-label={w.description} maxLength={600} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></label>
     <label className="flex gap-2">{w.status}<select className="rounded border bg-background p-2" aria-label={w.status} value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as typeof draft.status })}><option value="DRAFT">{w.draft}</option><option value="PUBLISHED">{w.published}</option><option value="ARCHIVED">{w.archived}</option></select></label>
