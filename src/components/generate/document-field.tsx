@@ -1,18 +1,29 @@
 "use client";
 
-import { FileText, X } from "lucide-react";
-import { useRef } from "react";
+import { FileText, Upload, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useT } from "@/i18n/client";
+import {
+  COURSE_FILE_EXTENSIONS,
+  IMAGE_EXTENSIONS,
+  MAX_IMAGES,
+  MAX_IMAGE_BYTES,
+  courseFileKind,
+  isImageName,
+} from "@/lib/course-file";
 import { formatBytes } from "@/lib/repo-tree";
+import { cn } from "@/lib/utils";
 
 /**
- * PDF/PPTX picker shared by the document and repository modes.
+ * Document/PDF picker with a drop zone, shared by the document and repository
+ * modes.
  *
- * The native input is remounted when the mode panel changes, so the selected
- * file is rendered from state as well: switching modes never looks like the
- * upload was lost. Validation stays in the form's submit handler, as before.
+ * The native input is remounted when the mode panel changes, so the selection
+ * is rendered from state as well: switching modes never looks like the upload
+ * was lost. Images are optional — a caller that omits `onImagesChange` keeps a
+ * document-only field and every dropped image is rejected with a message.
  */
 
 type DocumentFieldProps = {
@@ -22,10 +33,20 @@ type DocumentFieldProps = {
   file: File | null;
   disabled: boolean;
   onChange: (file: File | null) => void;
+  /** Dropped images, in the order they were added. */
+  images?: File[];
+  onImagesChange?: (images: File[]) => void;
 };
 
-const ACCEPT =
-  ".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation";
+const ACCEPT = [
+  ...COURSE_FILE_EXTENSIONS,
+  ...IMAGE_EXTENSIONS,
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+].join(",");
 
 export function DocumentField({
   id,
@@ -34,33 +55,148 @@ export function DocumentField({
   file,
   disabled,
   onChange,
+  images,
+  onImagesChange,
 }: DocumentFieldProps) {
   const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function clear(): void {
+  function clearDocument(): void {
     if (inputRef.current !== null) {
       inputRef.current.value = "";
     }
     onChange(null);
   }
 
+  /**
+   * Splits a pick or a drop into the document slot and the image list.
+   *
+   * Nothing is dropped silently: every rejected file sets a message, and the
+   * files that did pass are still applied.
+   */
+  function addFiles(candidates: File[]): void {
+    if (disabled || candidates.length === 0) {
+      return;
+    }
+
+    const current = images ?? [];
+    let nextDocument = file;
+    const nextImages = [...current];
+    let nextError: string | null = null;
+
+    for (const candidate of candidates) {
+      if (isImageName(candidate.name)) {
+        if (onImagesChange === undefined) {
+          nextError = t("generate.form.images.unsupported", {
+            name: candidate.name,
+          });
+          continue;
+        }
+        if (candidate.size > MAX_IMAGE_BYTES) {
+          nextError = t("generate.form.images.tooLarge", {
+            name: candidate.name,
+          });
+          continue;
+        }
+        if (nextImages.length >= MAX_IMAGES) {
+          nextError = t("generate.form.images.limit", { count: MAX_IMAGES });
+          continue;
+        }
+        nextImages.push(candidate);
+        continue;
+      }
+
+      if (courseFileKind(candidate.name) === null) {
+        nextError = t("generate.form.images.unsupported", {
+          name: candidate.name,
+        });
+        continue;
+      }
+
+      // The document slot holds one file; a later pick replaces it.
+      nextDocument = candidate;
+    }
+
+    setError(nextError);
+
+    if (nextDocument !== file) {
+      onChange(nextDocument);
+    }
+    if (onImagesChange !== undefined && nextImages.length !== current.length) {
+      onImagesChange(nextImages);
+    }
+  }
+
+  function removeImage(index: number): void {
+    if (onImagesChange === undefined) {
+      return;
+    }
+
+    onImagesChange((images ?? []).filter((_, position) => position !== index));
+    setError(null);
+  }
+
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <label className="text-sm font-medium" htmlFor={id}>
         {label}
       </label>
-      <input
-        accept={ACCEPT}
-        className="block w-full max-w-sm cursor-pointer rounded-lg border border-border bg-background text-sm file:mr-3 file:cursor-pointer file:rounded-l-lg file:border-0 file:bg-muted file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={disabled}
-        id={id}
-        onChange={(event) => {
-          onChange(event.target.files?.[0] ?? null);
+
+      <div
+        className={cn(
+          "rounded-lg border border-dashed px-4 py-5 text-center transition-colors",
+          isDragging ? "border-primary bg-primary/5" : "border-border bg-muted/30",
+          disabled ? "opacity-50" : "",
+        )}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          if (!disabled) {
+            setIsDragging(true);
+          }
         }}
-        ref={inputRef}
-        type="file"
-      />
+        onDragLeave={() => {
+          setIsDragging(false);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDragging(false);
+          addFiles([...event.dataTransfer.files]);
+        }}
+      >
+        <input
+          accept={ACCEPT}
+          className="sr-only"
+          disabled={disabled}
+          id={id}
+          multiple
+          onChange={(event) => {
+            addFiles([...(event.target.files ?? [])]);
+            // Let the same file be picked again after a rejection.
+            event.target.value = "";
+          }}
+          ref={inputRef}
+          type="file"
+        />
+        <label
+          className={cn(
+            "block text-sm",
+            disabled ? "cursor-not-allowed" : "cursor-pointer",
+          )}
+          htmlFor={id}
+        >
+          <Upload
+            aria-hidden="true"
+            className="mx-auto mb-1 size-4 text-muted-foreground"
+          />
+          {t("generate.form.images.drop")}
+        </label>
+      </div>
+
       {file === null ? null : (
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <FileText aria-hidden="true" className="size-3.5 shrink-0" />
@@ -70,8 +206,9 @@ export function DocumentField({
           <span className="tabular-nums">{formatBytes(file.size)}</span>
           <Button
             disabled={disabled}
-            onClick={clear}
+            onClick={clearDocument}
             size="xs"
+            type="button"
             variant="ghost"
           >
             <X aria-hidden="true" />
@@ -79,9 +216,77 @@ export function DocumentField({
           </Button>
         </p>
       )}
+
+      {images === undefined || images.length === 0 ? null : (
+        <ImageStrip
+          disabled={disabled}
+          images={images}
+          onRemove={removeImage}
+        />
+      )}
+
+      {error === null ? null : (
+        <p className="text-xs text-red-600" role="alert">
+          {error}
+        </p>
+      )}
+
       {hint === undefined ? null : (
         <p className="text-xs text-muted-foreground">{hint}</p>
       )}
     </div>
+  );
+}
+
+/** Thumbnails of the picked images, with object URLs owned by this component. */
+function ImageStrip({
+  images,
+  disabled,
+  onRemove,
+}: {
+  images: File[];
+  disabled: boolean;
+  onRemove: (index: number) => void;
+}) {
+  const t = useT();
+  const urls = useMemo(
+    () => images.map((image) => URL.createObjectURL(image)),
+    [images],
+  );
+
+  useEffect(() => {
+    return () => {
+      for (const url of urls) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [urls]);
+
+  return (
+    <ul className="flex flex-wrap gap-2">
+      {images.map((image, index) => (
+        <li className="relative" key={`${image.name}:${image.size}:${index}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- local preview of the file the user just picked */}
+          <img
+            alt={image.name}
+            className="size-16 rounded-md border object-cover"
+            src={urls[index]}
+          />
+          <Button
+            aria-label={t("generate.form.images.remove", { name: image.name })}
+            className="absolute -right-1.5 -top-1.5 rounded-full"
+            disabled={disabled}
+            onClick={() => {
+              onRemove(index);
+            }}
+            size="icon-xs"
+            type="button"
+            variant="secondary"
+          >
+            <X aria-hidden="true" />
+          </Button>
+        </li>
+      ))}
+    </ul>
   );
 }

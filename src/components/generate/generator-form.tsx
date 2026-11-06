@@ -93,6 +93,9 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
   const [topic, setTopic] = useState("");
   const [goal, setGoal] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [images, setImages] = useState<File[]>([]);
+  /** Names the course when the upload is images only; ignored for documents. */
+  const [imageTopic, setImageTopic] = useState("");
   const [instructions, setInstructions] = useState("");
   const [showInstructions, setShowInstructions] = useState(false);
   const [enhancedQuestions, setEnhancedQuestions] = useState<string[]>([]);
@@ -261,7 +264,7 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
     if (isRunning) {
       return;
     }
-    if (file === null) {
+    if (file === null && images.length === 0) {
       setError(t("generate.error.file"));
       return;
     }
@@ -272,9 +275,21 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
       return;
     }
 
+    // Images alone still need a subject; a filename is not a topic.
+    if (file === null && imageTopic.trim().length < 3) {
+      setError(t("generate.error.imagesTopic"));
+      return;
+    }
+
     const formData = new FormData();
-    formData.append("file", file);
+    if (file !== null) {
+      formData.append("files", file);
+    }
+    for (const image of images) {
+      formData.append("files", image);
+    }
     formData.append("instructions", instructions.trim());
+    formData.append("topic", imageTopic.trim());
 
     await run("file", () => generateCourseFromFileAction(formData));
   }
@@ -429,6 +444,7 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
         selectedPaths,
         instructions: instructions.trim(),
         document: file ?? undefined,
+        images: images.length > 0 ? images : undefined,
       }),
     );
   }
@@ -601,12 +617,38 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
               file={file}
               hint={t("generate.form.file.hint")}
               id="course-file"
+              images={images}
               label={t("generate.form.document.label")}
               onChange={(next) => {
                 setFile(next);
                 setError(null);
               }}
+              onImagesChange={(next) => {
+                setImages(next);
+                setError(null);
+              }}
             />
+
+            {images.length === 0 ? null : (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium" htmlFor="course-file-topic">
+                  {t("generate.form.images.topic.label")}
+                </label>
+                <Input
+                  disabled={isRunning}
+                  id="course-file-topic"
+                  maxLength={120}
+                  onChange={(event) => {
+                    setImageTopic(event.target.value);
+                  }}
+                  placeholder={t("generate.form.images.topic.placeholder")}
+                  value={imageTopic}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("generate.form.images.topic.hint")}
+                </p>
+              </div>
+            )}
 
             <InstructionsField
               disabled={isRunning}
@@ -616,7 +658,12 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
             />
 
             <Button
-              disabled={isRunning || isPreviewing || isSuggesting || file === null}
+              disabled={
+                isRunning ||
+                isPreviewing ||
+                isSuggesting ||
+                (file === null && images.length === 0)
+              }
               onClick={() => {
                 void generateFromFile();
               }}
@@ -801,9 +848,14 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
                     file={file}
                     hint={t("generate.form.repo.document.hint")}
                     id="repo-document"
+                    images={images}
                     label={t("generate.form.repo.document.label")}
                     onChange={(next) => {
                       setFile(next);
+                      setError(null);
+                    }}
+                    onImagesChange={(next) => {
+                      setImages(next);
                       setError(null);
                     }}
                   />
