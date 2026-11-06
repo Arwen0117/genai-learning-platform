@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   generateCourseFromFileAction,
+  enhanceTopicAction,
   generateLearnerCourse,
   type GenerateCourseResult,
 } from "@/server/generate";
@@ -93,6 +94,9 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
   const [goal, setGoal] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [instructions, setInstructions] = useState("");
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [enhancedQuestions, setEnhancedQuestions] = useState<string[]>([]);
+  const [isEnhancing, setIsEnhancing] = useState(false);
   const [repoUrl, setRepoUrl] = useState("");
   const [repoPreview, setRepoPreview] = useState<RepoPreview | null>(null);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
@@ -197,8 +201,46 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
     }
 
     await run("prompt", () =>
-      generateLearnerCourse({ topic: trimmedTopic, goal: goal.trim() }),
+      generateLearnerCourse({
+        topic: trimmedTopic,
+        goal: goal.trim(),
+        instructions: instructions.trim(),
+      }),
     );
+  }
+
+  /**
+   * Expands the topic into a goal plus instructions. The result lands in
+   * editable fields — it is never submitted for the learner.
+   */
+  async function enhanceTopic(): Promise<void> {
+    const trimmed = topic.trim();
+    if (isRunning || isEnhancing || trimmed.length < 3) {
+      return;
+    }
+
+    setError(null);
+    setIsEnhancing(true);
+
+    try {
+      const result = await enhanceTopicAction(trimmed);
+
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
+      setGoal(result.goal);
+      setInstructions(result.instructions);
+      setEnhancedQuestions(result.questions);
+      setShowInstructions(true);
+    } catch (cause: unknown) {
+      setError(
+        cause instanceof Error ? cause.message : t("generate.error.failed"),
+      );
+    } finally {
+      setIsEnhancing(false);
+    }
   }
 
   /** Shared client-side check for the optional document field. */
@@ -407,7 +449,7 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
                 {t("generate.form.topic.label")}
               </label>
               <Input
-                disabled={isRunning}
+                disabled={isRunning || isEnhancing}
                 id="topic"
                 maxLength={120}
                 onChange={(event) => {
@@ -421,6 +463,67 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
               </p>
             </div>
 
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">
+                {t("generate.form.enhance.examples")}
+              </span>
+              <Button
+                disabled={isRunning || isEnhancing}
+                onClick={() => {
+                  setTopic(t("generate.form.enhance.example.kpop"));
+                }}
+                size="xs"
+                type="button"
+                variant="outline"
+              >
+                {t("generate.form.enhance.example.kpop")}
+              </Button>
+              <Button
+                disabled={isRunning || isEnhancing}
+                onClick={() => {
+                  setTopic(t("generate.form.enhance.example.http"));
+                }}
+                size="xs"
+                type="button"
+                variant="outline"
+              >
+                {t("generate.form.enhance.example.http")}
+              </Button>
+              <Button
+                disabled={isRunning || isEnhancing}
+                onClick={() => {
+                  setTopic(t("generate.form.enhance.example.flask"));
+                }}
+                size="xs"
+                type="button"
+                variant="outline"
+              >
+                {t("generate.form.enhance.example.flask")}
+              </Button>
+              <Button
+                className="ml-auto"
+                disabled={isRunning || isEnhancing || topic.trim().length < 3}
+                onClick={() => {
+                  void enhanceTopic();
+                }}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                {isEnhancing ? (
+                  <>
+                    <Loader2 aria-hidden="true" className="animate-spin" />
+                    {t("generate.form.enhance.pending")}
+                  </>
+                ) : (
+                  <>
+                    <Sparkles aria-hidden="true" />
+                    {t("generate.form.enhance.submit")}
+                  </>
+                )}
+              </Button>
+            </div>
+
             <div className="space-y-1.5">
               <label className="text-sm font-medium" htmlFor="goal">
                 {t("generate.form.goal.label")}{" "}
@@ -429,7 +532,7 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
                 </span>
               </label>
               <Textarea
-                disabled={isRunning}
+                disabled={isRunning || isEnhancing}
                 id="goal"
                 maxLength={300}
                 onChange={(event) => {
@@ -441,9 +544,36 @@ export function GeneratorForm({ isTeacher }: { isTeacher: boolean }) {
               />
             </div>
 
+            {showInstructions ? (
+              <div className="space-y-2">
+                <InstructionsField
+                  disabled={isRunning || isEnhancing}
+                  id="topic-instructions"
+                  onChange={setInstructions}
+                  value={instructions}
+                />
+                {enhancedQuestions.length === 0 ? null : (
+                  <div className="rounded-lg border border-dashed px-3 py-2">
+                    <p className="text-xs font-medium">
+                      {t("generate.form.enhance.questions")}
+                    </p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+                      {enhancedQuestions.map((question) => (
+                        <li key={question}>{question}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
             <Button
               disabled={
-                isRunning || isPreviewing || isSuggesting || topic.trim().length < 3
+                isRunning ||
+                isEnhancing ||
+                isPreviewing ||
+                isSuggesting ||
+                topic.trim().length < 3
               }
               onClick={() => {
                 void generate();

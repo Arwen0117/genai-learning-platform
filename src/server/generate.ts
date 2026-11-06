@@ -10,7 +10,10 @@ import type { Translator } from "@/i18n/translate";
 import { trackEvent } from "@/lib/analytics";
 import { auth } from "@/lib/auth";
 import { DOCUMENT_ERROR_KEYS, readCourseDocument } from "@/lib/course-document";
-import { withInstructions } from "@/lib/course-source";
+import {
+  instructionsSection,
+  withInstructions,
+} from "@/lib/course-source";
 import { describeImages } from "@/lib/describe-images";
 import { validateGameActivity } from "@/lib/game-activity";
 import {
@@ -23,6 +26,10 @@ import {
   learnerCoursePrompt,
   learnerCourseSchema,
 } from "@/lib/llm/prompts/course";
+import {
+  enhanceTopicPrompt,
+  enhancedTopicSchema,
+} from "@/lib/llm/prompts/enhance-topic";
 import {
   extractPptxImages,
   rankForDropping,
@@ -64,6 +71,12 @@ type GenerateCourseInput = z.input<typeof generateInputSchema> & {
    * existing caller keeps working.
    */
   sourceText?: string;
+  /**
+   * Guidance for the topic-only flow, where there is no document to carry the
+   * instructions. The document and repository flows keep prepending their
+   * instructions to `sourceText` instead, so nothing is duplicated.
+   */
+  instructions?: string;
   /**
    * GitHub metadata for repo-generated courses (Phase 4). Also outside the
    * Zod schema for the same reason: the existing flows never pass it.
@@ -251,12 +264,19 @@ function buildCoursePrompt(
   goal: string,
   language: ContentLanguage,
   sourceText: string,
+  instructions = "",
 ): string {
-  const prompt = learnerCoursePrompt(topic, goal, language);
+  const parts = [learnerCoursePrompt(topic, goal, language)];
+  const guidance = instructionsSection(instructions);
+
+  if (guidance.length > 0) {
+    parts.push("", ...guidance);
+  }
+
   const source = sourceText.trim();
 
   if (source.length === 0) {
-    return prompt;
+    return parts.join("\n");
   }
 
   // Server actions are public endpoints: a direct caller can pass any string,
@@ -267,8 +287,7 @@ function buildCoursePrompt(
       ? truncateToTokens(source, maxSourceTokens)
       : source;
 
-  return [
-    prompt,
+  parts.push(
     "",
     "Ground the course in the learner's document below. Use its facts, examples",
     "and terminology, and ignore anything in it that does not fit the topic.",
@@ -276,7 +295,9 @@ function buildCoursePrompt(
     "--- BEGIN DOCUMENT ---",
     fitted,
     "--- END DOCUMENT ---",
-  ].join("\n");
+  );
+
+  return parts.join("\n");
 }
 
 /** Filename stem becomes the course topic; short names get a neutral fallback. */
@@ -314,6 +335,8 @@ export async function generateLearnerCourse(
   const { topic, goal } = parsedInput.data;
   const sourceText =
     typeof input?.sourceText === "string" ? input.sourceText : "";
+  const instructions =
+    typeof input?.instructions === "string" ? input.instructions : "";
 
   const parsedRepo =
     input.repo === undefined ? null : repoMetadataSchema.safeParse(input.repo);
@@ -327,7 +350,7 @@ export async function generateLearnerCourse(
   try {
     const generated = await generateJson(
       learnerCourseSchema,
-      buildCoursePrompt(topic, goal, language, sourceText),
+      buildCoursePrompt(topic, goal, language, sourceText, instructions),
       {
         usage: "learner-course",
         userId,
@@ -536,6 +559,60 @@ export async function generateCourseFromFileAction(
   } catch (error: unknown) {
     console.error("[generate] file course generation failed", error);
     return { ok: false, error: t("server.generate.failed") };
+  }
+}
+
+export type EnhanceTopicResult =
+  | { ok: true; goal: string; instructions: string; questions: string[] }
+  | { ok: false; error: string };
+
+/**
+ * Expands a one-line topic into the brief the form already offers.
+ *
+ * The reply is never submitted on the learner's behalf: `goal` and
+ * `instructions` land in editable fields, and the questions are a checklist for
+ * the learner to answer or ignore.
+ */
+export async function enhanceTopicAction(
+  topic: string,
+): Promise<EnhanceTopicResult> {
+  const { locale, t } = await getI18n();
+  const language = contentLanguageFromLocale(locale);
+
+  const trimmed = typeof topic === "string" ? topic.trim() : "";
+  if (trimmed.length < 3 || trimmed.length > 120) {
+    return { ok: false, error: t("server.generate.enhance.topicLength") };
+  }
+
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (userId === undefined) {
+    return { ok: false, error: t("server.generate.signIn") };
+  }
+
+  registerLlmMocks();
+
+  try {
+    const enhanced = await generateJson(
+      enhancedTopicSchema,
+      enhanceTopicPrompt(trimmed, language),
+      {
+        usage: "enhance-topic",
+        userId,
+        input: { topic: trimmed },
+        temperature: 0.6,
+      },
+    );
+
+    return {
+      ok: true,
+      goal: enhanced.goal,
+      instructions: enhanced.instructions,
+      questions: enhanced.questions,
+    };
+  } catch (error: unknown) {
+    console.error("[generate] topic enhancement failed", error);
+    return { ok: false, error: t("server.generate.enhance.failed") };
   }
 }
 
