@@ -130,7 +130,7 @@ describe("conditional program validation", () => {
     const cycle = { op: "if", condition, then: [] as unknown[], else: [] };
     cycle.then.push(cycle);
     expect(() => parseParallelProgram([cycle], level())).toThrow("IF_DEPTH_LIMIT");
-    expect(() => parseParallelProgram([{ ...choose[0], else: [{ op: "repeat", count: 2, body: [{ op: "wait" }] }] }], level())).toThrow("INVALID_ACTION");
+    expect(() => parseParallelProgram([{ ...choose[0], else: [{ op: "repeat", count: 2, body: [{ op: "repeat", count: 2, body: [{ op: "wait" }] }] }] }], level())).toThrow("INVALID_ACTION");
   });
   it("validates both branches even if one will never be taken", () => {
     expect(() => parseParallelProgram([{ ...choose[0], else: [{ op: "teleport" }] }], level())).toThrow("INVALID_ACTION");

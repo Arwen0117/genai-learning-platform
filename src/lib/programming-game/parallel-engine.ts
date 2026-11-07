@@ -198,40 +198,44 @@ export function parseParallelProgram(input: unknown, level: ParallelLevel): Para
     if (!level.allowed.includes(p.op as ParallelAction)) reject("DISALLOWED_ACTION");
     return { op: p.op as ParallelAction };
   }
-  function branch(input: unknown, nonempty: boolean, depth: number): ParallelProgram {
+  function marker(p: Record<string, unknown>): ParallelCommand {
+      if (++nodes > PARALLEL_LIMITS.nodes) reject("TOO_MANY_NODES");
+      if (!level.allowed.includes("label")) reject("DISALLOWED_LABEL");
+      if (!validLabel(p.id)) reject("INVALID_LABEL");
+      if (labels.has(p.id)) reject("DUPLICATE_LABEL");
+      labels.add(p.id); return { op: "label", id: p.id };
+  }
+  function branch(input: unknown, nonempty: boolean, depth: number, inRepeat: boolean): ParallelProgram {
     if (!Array.isArray(input) || (nonempty && !input.length) || input.length > PARALLEL_LIMITS.nodes)
       reject(nonempty ? "INVALID_THEN_BODY" : "INVALID_ELSE_BODY");
     // Bound depth before recursively inspecting any untrusted child.
-    return input.map((value) => { const child = object(value); return child.op === "if" ? conditional(child, depth + 1) : action(child); });
+    return input.map((value) => { const child = object(value); return child.op === "if" ? conditional(child, depth + 1, inRepeat) : child.op === "repeat" && !inRepeat ? repetition(child, depth) : child.op === "label" && !inRepeat ? marker(child) : action(child); });
   }
-  function conditional(p: Record<string, unknown>, depth = 1): ParallelCommand {
+  function conditional(p: Record<string, unknown>, depth = 1, inRepeat = false): ParallelCommand {
     if (depth > PARALLEL_IF_DEPTH) reject("IF_DEPTH_LIMIT");
     if (++nodes > PARALLEL_LIMITS.nodes) reject("TOO_MANY_NODES");
     if (!level.allowed.includes("if")) reject("DISALLOWED_IF");
     const c = objectCondition(p.condition);
     if ((c.kind === "item" || c.kind === "holding") && !level.delivery) reject("DELIVERY_NOT_ENABLED");
     if (c.kind === "value" && !level.delivery?.numbers) reject("NUMBERS_NOT_ENABLED");
-    return { op: "if", condition: c, then: branch(p.then, true, depth), else: branch(p.else, false, depth) };
+    return { op: "if", condition: c, then: branch(p.then, true, depth, inRepeat), else: branch(p.else, false, depth, inRepeat) };
   }
-  const program: ParallelProgram = input.map((value) => {
-    const p = object(value);
-    if (p.op === "label") {
-      if (++nodes > PARALLEL_LIMITS.nodes) reject("TOO_MANY_NODES");
-      if (!level.allowed.includes("label")) reject("DISALLOWED_LABEL");
-      if (!validLabel(p.id)) reject("INVALID_LABEL");
-      if (labels.has(p.id)) reject("DUPLICATE_LABEL");
-      labels.add(p.id); return { op: "label", id: p.id };
-    }
-    if (p.op === "if") return conditional(p);
-    if (p.op !== "repeat") return action(p);
+  function repetition(p: Record<string, unknown>, depth: number): ParallelCommand {
     if (++nodes > PARALLEL_LIMITS.nodes) reject("TOO_MANY_NODES");
     if (!level.allowed.includes("repeat")) reject("DISALLOWED_REPEAT");
     const count = integer(p.count, 1, PARALLEL_LIMITS.repeat, "INVALID_REPEAT_COUNT");
     if (!Array.isArray(p.body) || !p.body.length || p.body.length > PARALLEL_LIMITS.nodes) reject("INVALID_LOOP_BODY");
     return { op: "repeat", count, body: p.body.map((value) => {
       const child = object(value);
-      return child.op === "if" ? conditional(child) : action(child);
+      return child.op === "if" ? conditional(child, depth + 1, true) : action(child);
     }) };
+  }
+  const program: ParallelProgram = input.map((value) => {
+    const p = object(value);
+    if (p.op === "label") return marker(p);
+    if (p.op === "if") return conditional(p);
+    if (p.op !== "repeat") return action(p);
+    return repetition(p, 0);
   });
   for (const target of targets) if (!labels.has(target)) reject("MISSING_JUMP_TARGET");
   return program;

@@ -57,13 +57,17 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
     changeList(path.slice(0, -1), (list) => list.map((c, i) => i === path[path.length - 1] ? update(c) : c));
   }
   function options(parent: number[]): ParallelInsertOp[] {
-    let depth = 0, list = program;
+    let depth = 0, inRepeat = false, list = program;
     for (let i = 0; i < parent.length; i++) {
       const node = list[parent[i]];
-      if (node?.op === "repeat") list = node.body;
+      if (node?.op === "repeat") { inRepeat = true; list = node.body; }
       else if (node?.op === "if") { depth++; list = parent[++i] === 0 ? node.then : node.else; }
     }
-    const controls: ParallelInsertOp[] = !parent.length ? ["repeat", "if", "label", "jump"] : depth < PARALLEL_IF_DEPTH ? ["if", "jump"] : ["jump"];
+    const controls: ParallelInsertOp[] = [
+      ...(!inRepeat ? ["repeat" as const] : []),
+      ...(depth < PARALLEL_IF_DEPTH ? ["if" as const] : []),
+      ...(!inRepeat ? ["label" as const] : []), "jump",
+    ];
     return [...PARALLEL_ACTIONS, ...(level.delivery ? ["pickup", "drop"] as const : []), ...controls].filter((op) => level.allowed.includes(op));
   }
   function add(op: ParallelInsertOp, parent: number[] = []) {

@@ -64,11 +64,11 @@ describe("parallel palette insertion", () => {
     expect(getParallelEditorList(p, [0, 0, 0])).toEqual([]);
     expect(countParallelNodes(next)).toBe(3);
   });
-  it("accepts nested IF but rejects repeat inside either branch", () => {
+  it("accepts nested IF and repeat inside either branch", () => {
     const p = insertParallelCommand([], allowed, "if", 0)!;
     for (const branch of [0, 1]) {
       expect(insertParallelCommand(p, allowed, "if", 0, [0, branch])).not.toBeNull();
-      expect(insertParallelCommand(p, allowed, "repeat", 0, [0, branch])).toBeNull();
+      expect(insertParallelCommand(p, allowed, "repeat", 0, [0, branch])).not.toBeNull();
     }
   });
   it("changes only the addressed branch when reordering/deleting", () => {
@@ -105,10 +105,10 @@ describe("parallel palette insertion", () => {
     expect(insertParallelCommand([], allowed, "jump", 0)).toEqual([{ op: "jump", target: "" }]);
     expect(insertParallelCommand([{ op: "jump", target: "A" }], allowed, "label", 0)).toEqual([{ op: "label", id: "B" }, { op: "jump", target: "A" }]);
   });
-  it("allows branch jumps but rejects markers inside a loop or branch", () => {
+  it("allows branch jumps and markers but rejects markers inside a loop", () => {
     const p: ParallelProgram = [{ op: "if", condition: { kind: "goal", not: false }, then: [], else: [] }];
     expect(insertParallelCommand(p, allowed, "jump", 0, [0, 0])).not.toBeNull();
-    expect(insertParallelCommand(p, allowed, "label", 0, [0, 0])).toBeNull();
+    expect(insertParallelCommand(p, allowed, "label", 0, [0, 0])).not.toBeNull();
     expect(insertParallelCommand([{ op: "repeat", count: 2, body: [] }], allowed, "label", 0, [0])).toBeNull();
   });
 });
