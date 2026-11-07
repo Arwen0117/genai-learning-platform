@@ -1,7 +1,7 @@
 # Spec: Course Invitations and roster CSV template download
 
-**Status:** local draft (not published to GitHub)  
-**Triage:** ready-for-agent (when published)  
+**Status:** shipped  
+**Triage:** done  
 **Test seam (agreed):** Invitation module — create / list / revoke / redeem rules (and outcomes) behind thin server actions; same shape as CSV roster import. CSV template download is a fixed document helper, not a second seam.  
 **ADR:** `docs/adr/0001-open-multi-use-course-invitations.md`
 

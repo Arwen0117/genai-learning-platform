@@ -8,7 +8,7 @@ import {
 } from "@/lib/supporting-media-duration";
 
 /**
- * Single source of truth for lesson blocks (docs/plan/01 §3).
+ * Single source of truth for lesson blocks (see GLOSSARY.md; README block types).
  *
  * Blocks live in `Lesson.blocks` as plain JSON, so every read path must run the
  * payload through these schemas before rendering. New block type = add a schema

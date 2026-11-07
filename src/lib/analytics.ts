@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
-/** Engagement event types tracked across the platform (docs/plan/01 §5). */
+/** Engagement event types tracked across the platform (see GLOSSARY.md Insights). */
 export type EngagementEventType =
   | "LOGIN"
   | "COURSE_VIEW"

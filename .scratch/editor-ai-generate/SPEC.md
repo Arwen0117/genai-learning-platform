@@ -1,7 +1,7 @@
 # Spec: AI generate Game Activity and Simulation in the lesson editor
 
-**Status:** local draft (not yet published to GitHub)  
-**Triage:** ready-for-agent (when published)  
+**Status:** shipped  
+**Triage:** done  
 **Test seams (agreed):**
 
 1. **Generation contract (primary)** — instructor server actions that take lesson-scoped context and return a validated Game Activity or Simulation Block, or a visible failure without mutating caller state. Reuse `generateGameActivity`; add `generateSimulationBlock`. Prior art: Game Activity validation and lesson/Simulation prompt tests.

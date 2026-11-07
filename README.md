@@ -19,16 +19,23 @@ bilingual (English / 简体中文) and switches instantly from the header.
   ordered Challenges.
 - Track per-lesson progress and quiz scores; completing every block completes the lesson.
 - Ask the AI tutor for help inside a lesson (streamed responses, lesson-aware context).
+- Get a Lesson Coach nudge when stalled on a block; submit Lesson Feedback (reason + note)
+  that Instructors see on Insights.
 - Hit **Explain for me** on a block to get a simpler re-explanation, stored per user.
 - Practise a conversation in the roleplay block and receive a rubric-based AI report.
+- Play Robot Courses (Programming Game levels) on dedicated play routes.
 - Generate a personal three-lesson mini-course from a topic (visible only to its author).
 
 **Instructors**
 
 - Create a course by hand, or describe a topic and let the wizard draft the outline and
   lessons (everything stays editable before publishing).
+- Enhance a topic into a short generator brief (goal, instructions, questions); attach
+  images or PPTX as source material for generation.
 - Edit the full structure — modules, lessons, blocks — in a single-screen editor with
   per-field validation for all nine block types.
+- Author Robot Courses on dedicated teach routes (`/teach/programming-game/...`), not the
+  normal course editor.
 - Manage the student roster: import a CSV of emails, new accounts get a temporary
   password, and download the roster plus progress as a CSV.
 - Review engagement analytics: daily active learners, completion rate, quiz averages and
@@ -132,14 +139,18 @@ prisma/
 - 课程由图文阅读、测验、单词卡、反思、幻灯片、编程练习、模拟和角色扮演内容块组成，另有由有序 Challenges 构成的 Game Activity。
 - 记录每节课的完成进度与测验得分；所有块都完成后该节课自动完成。
 - 在课时内向 AI 导师提问（流式回答，自动带上当前课时的上下文）。
+- 在内容块上停留过久时收到 Lesson Coach 提示；可提交 Lesson Feedback（原因 + 备注），教师在 Insights 中查看。
 - 对任意块点「帮我讲解」，获得更通俗的重新解释，结果按用户保存。
 - 在角色扮演块里练习对话，结束后拿到基于评分细则的 AI 反馈报告。
+- 在专用播放路由上游玩 Robot Course（Programming Game 关卡）。
 - 输入一个主题，自动生成三门课的个人迷你课程（仅作者本人可见）。
 
 **教师**
 
 - 手工创建课程，或输入主题让向导起草大纲与课时内容（发布前所有内容都可编辑）。
+- 用 Topic enhance 把一句话主题扩成生成器用的简要 brief（目标、说明、起始问题）；可附图片或 PPTX 作为生成素材。
 - 在单页编辑器里增删改模块、课时与内容块，九种块都有逐字段校验。
+- 在专用教学路由（`/teach/programming-game/...`）上编写 Robot Course，不走普通课程编辑器。
 - 管理学生名单：CSV 批量导入邮箱，新账号自动生成临时密码；可导出名单与学习进度 CSV。
 - 查看学情分析：每日活跃学习者、完成率、测验均分、内容块类型分布。
 
