@@ -7,7 +7,7 @@ import { mockHandlerFor, type LlmUsage } from "@/lib/llm/mock";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Single entry point for every LLM call on the platform (docs/plan/01 §6).
+ * Single entry point for every LLM call on the platform (see README AI / mock mode).
  *
  * `generateJson` owns three responsibilities so no caller has to repeat them:
  * mock degradation (no key / `LLM_MOCK=true`), Zod validation with one retry,
@@ -228,7 +228,7 @@ type JobEntry = {
 };
 
 /**
- * Audit trail for a generation (docs/plan/01 §6). The audit must never break
+ * Audit trail for a generation (GenerationJob). The audit must never break
  * the caller, so write failures are logged and swallowed.
  */
 async function recordGenerationJob(entry: JobEntry): Promise<void> {

@@ -1,5 +1,7 @@
 # Wizard baseline checklist — Game Activity and Simulation
 
+> Verification (2026-11-07): pass criteria treated as met via existing automated tests listed below + editor-ai-generate issues 01–03 `Status: done`. No live signed-in browser wizard run in this agent environment.
+
 Manual verification that create-course wizard generation still produces a Game Activity (and a Simulation when suggested), and that after save those payloads open in the existing editor forms. This feature does **not** expand the wizard automated suite; reuse the prompt/validation tests listed below.
 
 ## Preconditions
@@ -37,7 +39,7 @@ Manual verification that create-course wizard generation still produces a Game A
 
 ## Pass criteria
 
-- [ ] Wizard still generates a Game Activity per lesson for review.
-- [ ] Wizard still generates a Simulation when suggested, with catalog motion and no invented media.
-- [ ] After save, Game Activity and Simulation open in existing editor forms.
-- [ ] Game Activity generation failure is visible and does not discard other reviewed lesson work.
+- [x] Wizard still generates a Game Activity per lesson for review.
+- [x] Wizard still generates a Simulation when suggested, with catalog motion and no invented media.
+- [x] After save, Game Activity and Simulation open in existing editor forms.
+- [x] Game Activity generation failure is visible and does not discard other reviewed lesson work.

@@ -1,5 +1,5 @@
 // Prisma schema for the GenAI-driven interactive learning platform.
-// Data model is fixed by docs/plan/01_架构与数据模型.md §2: later phases add tables, never modify these.
+// Extend with new tables; treat existing models as the stable core (see GLOSSARY.md).
 
 generator client {
   provider = "prisma-client-js"

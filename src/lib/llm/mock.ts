@@ -1,5 +1,5 @@
 /**
- * Mock fallbacks for the LLM service layer (docs/plan/01 §6).
+ * Mock fallbacks for the LLM service layer (see README mock mode).
  *
  * Every `generateJson` call declares a usage key. In mock mode the provider
  * looks the handler up here instead of calling the model, so a demo run

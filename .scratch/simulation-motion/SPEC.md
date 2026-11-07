@@ -1,7 +1,7 @@
 # Spec: Simulation motion and Supporting media
 
-**Status:** local draft (not yet published to GitHub)  
-**Triage:** ready-for-agent (when published)  
+**Status:** shipped  
+**Triage:** done  
 **Test seam (agreed):** simulation payload contract + beat resolution — a pure resolve function over Simulation Block payload / node / beat that yields effective motion pattern id and optional Supporting media; schema enforces catalog membership and simulation animation duration ≤ 10s (Game Activity Challenges remain ≤ 5s).
 
 ## Problem Statement

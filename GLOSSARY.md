@@ -105,3 +105,29 @@ _Avoid_: Custom animation, CSS string
 **Motion beat**:
 One of the four presentation moments in a Simulation run where a Motion pattern may apply: node enter, choice selected, feedback reveal, or summary enter.
 _Avoid_: Step, frame, transition
+
+## Lesson surfaces
+
+**Lesson Coach**:
+A learner-facing stall nudge on the lesson page that offers a block hint after dwell time, and next-lesson links when the lesson is complete; not an LLM chat.
+_Avoid_: AI tutor (as this surface), Coach entity
+
+**Lesson Feedback**:
+An optional learner report on one Lesson (reason + note), one row per User per Lesson, shown on Insights.
+_Avoid_: Challenge instructional feedback, Correction, Playthrough feedback
+
+## Robot programming
+
+**Programming Game**:
+A warehouse-robot practice activity where the learner composes a program and runs it on a map; may appear as a Game Activity variant or inside a Robot Course.
+_Avoid_: Executable Python/Java/C++, Game block
+
+**Robot Course**:
+A Course of parallel multi-robot Programming Game levels (slug prefix `robot-game-`, topic "Robot programming"), authored and played on dedicated teach/play routes rather than the normal course editor.
+_Avoid_: Folding into the normal course editor, separate product type beyond Course
+
+## Course generation aids
+
+**Topic enhance**:
+An LLM pass that turns a one-line topic into goal, instructions, and starter questions for the course generator; it does not write lessons or an outline. The filled fields are sometimes called a course brief informally; that brief is not a stored entity.
+_Avoid_: Outline generation, lesson drafting, Course Brief entity
