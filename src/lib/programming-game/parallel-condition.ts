@@ -9,13 +9,13 @@ export function changeParallelConditionKind(condition: ParallelCondition, kind: 
   if (kind === condition.kind) return condition;
   if (kind === "value") return { kind, source: "item", operator: "gte", value: 0, not: condition.not, ...(direction ? { direction } : {}) };
   if (kind === "holding") return { kind, not: condition.not };
-  if (kind === "goal" || kind === "item") return { kind, not: condition.not, ...(direction ? { direction } : {}) };
+  if (kind === "goal" || kind === "item" || kind === "delivery") return { kind, not: condition.not, ...(direction ? { direction } : {}) };
   return { kind, direction: direction ?? "right", not: condition.not };
 }
 export function changeParallelObservation(condition: ParallelCondition, scope: ParallelDirection | "current"): ParallelCondition {
   if (condition.kind === "holding" || (condition.kind === "value" && condition.source === "holding")) return condition;
   if (condition.kind === "value") { const next = { ...condition }; delete next.direction; return { ...next, ...(scope === "current" ? {} : { direction: scope }) }; }
-  if (condition.kind === "goal" || condition.kind === "item") return { kind: condition.kind, not: condition.not, ...(scope === "current" ? {} : { direction: scope }) };
+  if (condition.kind === "goal" || condition.kind === "item" || condition.kind === "delivery") return { kind: condition.kind, not: condition.not, ...(scope === "current" ? {} : { direction: scope }) };
   return scope === "current" ? condition : { ...condition, direction: scope };
 }
 

@@ -31,3 +31,14 @@ it("lists IF branch markers as jump destinations", () => {
   const { container } = render(<CompactParallelEditor level={level} program={nested} focus={null} onEdit={vi.fn()} locale="en" />);
   expect(container.querySelector('select option[value="NESTED"]')).toBeTruthy();
 });
+it("offers delivery zones only on parcel levels and preserves the arrow when selected", async () => {
+  const { createDeliveryPayload } = await import("@/lib/programming-game/delivery-level");
+  const onEdit = vi.fn(); const p: ParallelProgram = [{ op:"if",condition:{kind:"wall",direction:"down",not:true},then:[],else:[] }];
+  const { container, rerender } = render(<CompactParallelEditor level={createDeliveryPayload("zh",1).customLevel!} program={p} focus={null} onEdit={onEdit} locale="zh" />);
+  const select=container.querySelector<HTMLSelectElement>(".pg-condition-select")!;
+  expect(select.querySelector('option[value="delivery"]')?.textContent).toBe("配送区");
+  fireEvent.change(select,{target:{value:"delivery"}});
+  expect(onEdit.mock.lastCall?.[0][0].condition).toEqual({kind:"delivery",direction:"down",not:true});
+  rerender(<CompactParallelEditor level={level} program={p} focus={null} onEdit={onEdit} locale="zh" />);
+  expect(container.querySelector('.pg-condition-select option[value="delivery"]')).toBeNull();
+});

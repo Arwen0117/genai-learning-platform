@@ -94,7 +94,7 @@ describe("numeric parcels: authoritative comparisons and exact delivery", () => 
   expect(changeParallelObservation({ ...condition({ source: "holding" }) }, "up")).toEqual(condition({ source: "holding" }));
  });
  it("formats source/operator/threshold and NOT consistently for answer and history", () => {
-  const labels = { up: "U", down: "D", left: "L", right: "R", current: "Here", self: "Self" }, kinds = { wall: "Wall", boundary: "Edge", robot: "Robot", goal: "Goal", item: "Item", holding: "Holding", value: "Value" };
+  const labels = { up: "U", down: "D", left: "L", right: "R", current: "Here", self: "Self" }, kinds = { delivery: "Delivery zone", wall: "Wall", boundary: "Edge", robot: "Robot", goal: "Goal", item: "Item", holding: "Holding", value: "Value" };
   expect(parallelConditionLabel(condition({ source: "holding", operator: "gte", value: -2 }), labels, kinds, { item: "Ground", holding: "Carried" })).toBe("Self · Carried ≥ -2");
   expect(parallelConditionLabel(condition({ not: true }), labels, kinds, { item: "Ground", holding: "Carried" })).toBe("NOT (Here · Ground = 3)");
  });

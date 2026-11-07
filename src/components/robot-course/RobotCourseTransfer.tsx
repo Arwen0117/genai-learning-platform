@@ -46,8 +46,8 @@ export function RobotCourseTransfer({ draft, locale, onImport }: { draft: RobotC
       {reading ? (zh ? "读取中…" : "Reading…") : dragging ? (zh ? "松开以读取课程文件" : "Release to read the course file") : (zh ? "将课程 JSON 文件拖到这里，或点击选择（最大 2 MiB）" : "Drop a course JSON file here, or click to choose (up to 2 MiB)")}
     </button>
     <p className="text-sm text-muted-foreground">{zh ? "导出当前编辑内容，包含地图、参考答案、提示与教学解说，不包含学生记录。导入会创建新草稿；请先导出当前未保存的修改。" : "Exports current maps, reference answers, hints and teaching notes, without learner records. Import creates a new draft; export any unsaved changes first."}</p>
-    {pending && <div className="space-y-2 rounded border p-3"><p>{pending.title} · {pending.levels.length} {zh ? "关" : "levels"} · {pending.language}</p><p className="text-sm">{zh ? "确认后将切换到导入的新草稿，当前未保存的修改将被替换。原课程不变；请手动验证参考答案后保存。" : "Confirming replaces the current unsaved editor content with a new draft. The original saved course stays intact. Run reference checks manually before saving."}</p>
-      <Button type="button" onClick={() => { onImport(pending); setPending(null); setNotice(zh ? "已导入新草稿，请验证后保存。" : "New draft imported. Verify and save it."); }}>{zh ? "确认为新草稿" : "Confirm as new draft"}</Button>{" "}
+    {pending && <div className="space-y-2 rounded border p-3"><p>{pending.title} · {pending.levels.length} {zh ? "关" : "levels"} · {pending.language}</p><p className="text-sm">{zh ? "确认后将切换到导入的新草稿，当前未保存的修改将被替换。原课程不变；导入后可直接保存，保存时会自动校验参考答案。" : "Confirming replaces the current unsaved editor content with a new draft. The original saved course stays intact. Imported references will be checked automatically when you save."}</p>
+      <Button type="button" onClick={() => { onImport(pending); setPending(null); setNotice(zh ? "已导入新草稿，可直接保存，无需逐关手动运行。" : "New draft imported. Save directly without running every level manually."); }}>{zh ? "确认为新草稿" : "Confirm as new draft"}</Button>{" "}
       <Button type="button" variant="outline" onClick={() => setPending(null)}>{zh ? "取消" : "Cancel"}</Button>
     </div>}
     <p role="status" className="text-sm">{notice}</p>
