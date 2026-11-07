@@ -1,4 +1,5 @@
 "use server";
+import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
@@ -6,11 +7,14 @@ import { prisma } from "@/lib/prisma";
 import { isRobotCourse, ROBOT_COURSE_TOPIC, robotCourseDraftSchema, type RobotCourseDraft } from "@/lib/programming-game/robot-course";
 import { courseProgrammingPayloadSchema, isParallelProgramming } from "@/lib/programming-game/course-config";
 
-export async function saveRobotCourse(courseId: string | null, input: unknown) {
+export async function saveRobotCourse(courseId: string | null, input: unknown, removedLessonIds: unknown = []) {
   try {
     const user = (await auth())?.user;
     if (!user || (user.role !== "INSTRUCTOR" && user.role !== "ADMIN")) throw new Error("Teacher access required.");
     const p = robotCourseDraftSchema.parse(input);
+    const removed = z.array(z.string().uuid()).max(20).parse(removedLessonIds);
+    if (new Set(removed).size !== removed.length || (!courseId && removed.length)) throw new Error("Invalid removed level IDs.");
+    const historyError = p.language === "zh" ? "无法删除已有学习记录的关卡，请恢复被删除的关卡后保存。" : "Cannot delete levels with learning records. Restore the removed levels before saving.";
     const saved = await prisma.$transaction(async (tx) => {
       if (!courseId) {
         const prior = await tx.course.findUnique({ where: { id: p.draftId } });
@@ -30,13 +34,26 @@ export async function saveRobotCourse(courseId: string | null, input: unknown) {
       if (!existing || existing.createdById !== user.id || !isRobotCourse(existing) || existing.modules.length !== 1) throw new Error("Game course not found or not owned by you.");
       if (!p.updatedAt || existing.updatedAt.toISOString() !== p.updatedAt) throw new Error("Course changed. Reload before saving.");
       const courseModule = existing.modules[0], submitted = new Map(p.levels.map((l) => [l.lessonId, l]));
-      // No silent deletion or identity replacement of levels that may have history.
+      const omitted = courseModule.lessons.filter((l) => !submitted.has(l.id)).map((l) => l.id);
+      if (omitted.length !== removed.length || !omitted.every((id) => removed.includes(id))) throw new Error("Confirm the exact levels to remove.");
+      // Preserve every retained identity; removing a level is explicit and history-free only.
       for (const old of courseModule.lessons) {
         const next = submitted.get(old.id), blocks = old.blocks as { id: string }[];
-        if (!next || !Array.isArray(blocks) || blocks.length !== 1 || blocks[0].id !== next.blockId) throw new Error("Keep existing level and block IDs.");
+        if (!next) continue;
+        if (!Array.isArray(blocks) || blocks.length !== 1 || blocks[0].id !== next.blockId) throw new Error("Keep existing level and block IDs.");
+      }
+      const protectedRelations = { progress: { none: {} }, activityAttempts: { none: {} }, playthroughs: { none: {} }, gameActivityVersions: { none: {} }, feedback: { none: {} } };
+      if (removed.length) {
+        const eligible = await tx.lesson.count({ where: { id: { in: removed }, moduleId: courseModule.id, ...protectedRelations } });
+        const overrides = await tx.userBlockOverride.count({ where: { lessonId: { in: removed } } });
+        if (eligible !== removed.length || overrides) throw new Error(historyError);
       }
       const updated = await tx.course.updateMany({ where: { id: courseId, createdById: user.id, updatedAt: new Date(p.updatedAt) }, data: { title: p.title, description: p.description, language: p.language, status: p.status } });
       if (updated.count !== 1) throw new Error("Course changed. Reload before saving.");
+      if (removed.length) {
+        const deleted = await tx.lesson.deleteMany({ where: { id: { in: removed }, moduleId: courseModule.id, ...protectedRelations } });
+        if (deleted.count !== removed.length) throw new Error(historyError);
+      }
       const oldIds = new Set(courseModule.lessons.map((l) => l.id));
       for (const [i, l] of p.levels.entries()) {
         const data = { title: l.title, order: i, blocks: JSON.parse(JSON.stringify([{ id: l.blockId, type: "game", title: l.title, payload: l.payload }])) as Prisma.InputJsonValue };
