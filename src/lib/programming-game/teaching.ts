@@ -25,6 +25,7 @@ export function buildProgrammingTeaching(level: ParallelLevel, input: ParallelPr
     const text = c.kind === "value" ? `${c.source === "holding" ? zh ? "手中物品数值" : "carried parcel value" : zh ? `${cell}的物品数值` : `parcel value in ${cell}`} ${operators[c.operator]} ${c.value}`
       : c.kind === "holding" ? zh ? "自己正在携带物品" : "this robot is carrying a parcel"
       : c.kind === "goal" ? zh ? `${cell}是机器人目标格` : `${cell} is a robot goal`
+      : c.kind === "delivery" ? zh ? `${cell}是物品配送区` : `${cell} is a parcel delivery zone`
       : c.kind === "item" ? zh ? `${cell}有地上物品` : `${cell} has a ground parcel`
       : c.kind === "wall" ? zh ? `${cell}有障碍` : `${cell} has a wall`
       : c.kind === "boundary" ? zh ? `${cell}在地图外` : `${cell} is outside the map`

@@ -21,7 +21,7 @@ export const PARALLEL_COMPARISONS = ["eq", "ne", "lt", "lte", "gt", "gte"] as co
 export type ParallelComparison = (typeof PARALLEL_COMPARISONS)[number];
 export type ParallelCondition =
   | { kind: "value"; source: "item" | "holding"; operator: ParallelComparison; value: number; not: boolean; direction?: ParallelDirection }
-  | { kind: "goal" | "item"; not: boolean; direction?: ParallelDirection }
+  | { kind: "goal" | "item" | "delivery"; not: boolean; direction?: ParallelDirection }
   | { kind: "holding"; not: boolean }
   | { kind: "wall" | "boundary" | "robot"; direction: ParallelDirection; not: boolean };
 export type ParallelCommand = { op: ParallelAction } | {
@@ -216,7 +216,7 @@ export function parseParallelProgram(input: unknown, level: ParallelLevel): Para
     if (++nodes > PARALLEL_LIMITS.nodes) reject("TOO_MANY_NODES");
     if (!level.allowed.includes("if")) reject("DISALLOWED_IF");
     const c = objectCondition(p.condition);
-    if ((c.kind === "item" || c.kind === "holding") && !level.delivery) reject("DELIVERY_NOT_ENABLED");
+    if ((c.kind === "item" || c.kind === "holding" || c.kind === "delivery") && !level.delivery) reject("DELIVERY_NOT_ENABLED");
     if (c.kind === "value" && !level.delivery?.numbers) reject("NUMBERS_NOT_ENABLED");
     return { op: "if", condition: c, then: branch(p.then, true, depth, inRepeat), else: branch(p.else, false, depth, inRepeat) };
   }
@@ -258,7 +258,7 @@ function objectCondition(input: unknown): ParallelCondition {
     if (p.direction !== undefined) reject("INVALID_CONDITION");
     return { kind: p.kind, not: p.not };
   }
-  if (p.kind === "goal" || p.kind === "item") {
+  if (p.kind === "goal" || p.kind === "item" || p.kind === "delivery") {
     if (p.direction !== undefined && !["up", "down", "left", "right"].includes(p.direction as string)) reject("INVALID_CONDITION");
     return { kind: p.kind, not: p.not, ...(p.direction !== undefined ? { direction: p.direction as ParallelDirection } : {}) };
   }
@@ -402,6 +402,7 @@ export function observeParallelCondition(level: ParallelLevel, robots: ParallelR
     value = number !== undefined && compareParallelValue(number, condition.operator, condition.value);
   }
   else if (condition.kind === "goal") value = level.goals.some((g) => key(g) === key(target));
+  else if (condition.kind === "delivery") value = !!level.delivery?.targets.some((zone) => key(zone) === key(target));
   else if (condition.kind === "holding") value = !!robot.holding;
   else if (condition.kind === "item") value = items.some((i) => i.position && key(i.position) === key(target));
   else if ("direction" in condition) {

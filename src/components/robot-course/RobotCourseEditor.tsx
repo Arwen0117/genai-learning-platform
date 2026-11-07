@@ -15,6 +15,7 @@ import { RobotLevelDesigner } from "./RobotLevelDesigner";
 import { RobotCourseScreen } from "./RobotCourseScreen";
 import { RobotCourseTransfer } from "./RobotCourseTransfer";
 import { RobotLevelManagement } from "./RobotLevelManagement";
+import { RobotCourseSaveStatus } from "./RobotCourseSaveStatus";
 import { ROBOT_MESSAGES } from "./messages";
 
 type SaveResult = { ok: true; courseId: string; updatedAt: string } | { ok: false; error: string };
@@ -31,8 +32,20 @@ export function RobotCourseEditor({ courseId: initialCourseId = null, initial }:
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => { latest.current = signature; }, [signature]);
   const [checks, setChecks] = useState<Record<string, { signature: string; passed: boolean }>>(() => Object.fromEntries(initial.updatedAt ? initial.levels.filter((l) => l.payload.customLevel).map((l) => [l.lessonId, { signature: referenceSignature(l.payload), passed: true }]) : []));
-  const level = draft.levels[active], structurallyValid = robotCourseEditingSchema.safeParse(draft).success;
-  const valid = structurallyValid && draft.levels.every((l) => !l.payload.customLevel || (checks[l.lessonId]?.passed && checks[l.lessonId]?.signature === referenceSignature(l.payload)));
+  const [importedReferences, setImportedReferences] = useState<Record<string, string>>({});
+  const level = draft.levels[active], structure = robotCourseEditingSchema.safeParse(draft), structurallyValid = structure.success;
+  const pendingLevels = draft.levels.flatMap((l, index) => {
+    if (!l.payload.customLevel) return [];
+    const check = checks[l.lessonId], signature = referenceSignature(l.payload);
+    if (check?.signature === signature) { if (check.passed) return []; }
+    else if (importedReferences[l.lessonId] === signature) return [];
+    // Unchanged imported references are validated authoritatively on save.
+    // Editing or a failed manual run must still block the normal editor gate.
+    const reason = !check ? "pending" as const : check.signature !== referenceSignature(l.payload) ? "changed" as const : "failed" as const;
+    return [{ index, title: l.title, reason }];
+  });
+  const valid = structurallyValid && pendingLevels.length === 0;
+  const serverChecksPending = draft.levels.some(l => l.payload.customLevel && importedReferences[l.lessonId] === referenceSignature(l.payload) && !(checks[l.lessonId]?.passed && checks[l.lessonId]?.signature === referenceSignature(l.payload)));
   const onVerified = useCallback((signature: string, passed: boolean) => setChecks((old) => old[level.lessonId]?.signature === signature && old[level.lessonId]?.passed === passed ? old : { ...old, [level.lessonId]: { signature, passed } }), [level.lessonId]);
   function changeLevel(next: typeof level) { setDraft((d) => ({ ...d, levels: d.levels.map((l, i) => i === active ? next : l) })); setNotice(""); }
   function addLevel(kind: string) {
@@ -70,6 +83,8 @@ export function RobotCourseEditor({ courseId: initialCourseId = null, initial }:
       if (!mounted.current) return;
       if (!result.ok) throw new Error(result.error);
       setSavedLessonIds(new Set(draft.levels.map((l) => l.lessonId))); setRemoved([]);
+      setChecks(Object.fromEntries(draft.levels.filter(l => l.payload.customLevel).map(l => [l.lessonId, { signature: referenceSignature(l.payload), passed: true }])));
+      setImportedReferences({});
       setCourseId(result.courseId); setDraft((d) => ({ ...d, updatedAt: result.updatedAt })); setNotice(locale === "zh" ? "课程已保存" : "Course saved");
       window.history.replaceState(null, "", `/teach/programming-game/${result.courseId}`);
     } catch (e) { if (mounted.current) setNotice(e instanceof Error ? e.message : w.failed); } finally { savingNow.current = false; if (mounted.current) setBusy(false); }
@@ -86,7 +101,7 @@ export function RobotCourseEditor({ courseId: initialCourseId = null, initial }:
   }
   return <div className="space-y-5"><h1 className="text-2xl font-semibold">{w.edit}</h1><fieldset disabled={busy} className="min-w-0 space-y-4 rounded-xl border p-4">
     <RobotCourseTransfer draft={draft} locale={locale} onImport={(imported) => {
-      latest.current = ""; setDraft(imported); setCourseId(null); setActive(0); setChecks({}); setSavedLessonIds(new Set()); setRemoved([]);
+      latest.current = ""; setDraft(imported); setCourseId(null); setActive(0); setChecks({}); setImportedReferences(Object.fromEntries(imported.levels.filter(l => l.payload.customLevel).map(l => [l.lessonId, referenceSignature(l.payload)]))); setSavedLessonIds(new Set()); setRemoved([]);
       setGenerated(null); setStudentPreview(false); setNotice("");
       window.history.replaceState(null, "", "/teach/programming-game/new");
     }} />
@@ -114,7 +129,8 @@ export function RobotCourseEditor({ courseId: initialCourseId = null, initial }:
     {!studentPreview && <RobotLevelDesigner key={level.lessonId} payload={level.payload} locale={locale} onVerified={onVerified} onChange={(payload) => changeLevel({ ...level, payload })} />}
     <div className="flex flex-wrap gap-3"><Button type="button" disabled={generating || !parallelProgrammingEditingSchema.safeParse(level.payload).success} variant="outline" onClick={() => void hints()}>{generating ? w.generating : w.ai}</Button><Button type="button" disabled={!valid || busy} onClick={() => void save()}>{busy ? w.saving : w.save}</Button>{courseId && <a className="self-center underline" href={`/play/programming/${courseId}?preview=1`}>{w.play}</a>}</div>
     {generated && <div className="space-y-2 rounded border p-3">{generated.mock && <p>{w.mock}</p>}<ol className="list-decimal pl-5">{generated.hints.map((h, i) => <li key={i}>{h}</li>)}</ol><Button type="button" variant="outline" disabled={generated.signature !== signature} onClick={() => { changeLevel({ ...level, payload: { ...level.payload, hints: generated.hints } }); setGenerated(null); }}>{w.apply}</Button></div>}
-    {level.payload.customLevel && <p role="status" className="text-sm">{checks[level.lessonId]?.signature === referenceSignature(level.payload) ? checks[level.lessonId]?.passed ? w.valid : w.referenceFailed : w.pending}</p>}
+    {level.payload.customLevel && <p role="status" className="text-sm">{locale === "zh" ? "当前关卡：" : "Current level: "}{checks[level.lessonId]?.signature === referenceSignature(level.payload) ? checks[level.lessonId]?.passed ? w.valid : w.referenceFailed : importedReferences[level.lessonId] === referenceSignature(level.payload) ? (locale === "zh" ? "已导入参考答案，可直接保存；保存时自动校验。" : "Imported reference is ready to save; it will be checked on save.") : w.pending}</p>}
+    <RobotCourseSaveStatus serverChecksPending={serverChecksPending} pending={pendingLevels} issues={structure.success ? [] : structure.error.issues} locale={locale} onSelect={(index) => { setActive(index); setStudentPreview(false); setGenerated(null); }} />
     <p role="status" className="text-sm">{notice}</p>
   </fieldset>
     {studentPreview && <section><h2 className="text-xl font-semibold">{w.preview}</h2><p className="text-sm text-muted-foreground">{w.unsaved}</p>

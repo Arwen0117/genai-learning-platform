@@ -167,7 +167,7 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
                 {parallelObservation(c.condition) === "current" ? <span aria-hidden="true" className="pg-current-cell">◎</span> : <svg aria-hidden="true" className="pg-direction-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: `rotate(${{ right: 0, down: 90, left: 180, up: -90 }[parallelObservation(c.condition) as keyof typeof ARROWS]}deg)` }}><path d="M4 12h15m-6-6 6 6-6 6" /></svg>}
                 <select className="pg-block-select pg-direction-select" value={parallelObservation(c.condition)} aria-label={`${p.direction} ${num}`} title={p.direction}
                   onChange={(e) => changeNode(path, (node) => node.op === "if" ? { ...node, condition: changeParallelObservation(node.condition, e.target.value as keyof typeof ARROWS | "current") } : node)}>
-                  {(c.condition.kind === "goal" || c.condition.kind === "item" || c.condition.kind === "value") && <option value="current">◎ {p.currentCell}</option>}
+                  {(c.condition.kind === "goal" || c.condition.kind === "delivery" || c.condition.kind === "item" || c.condition.kind === "value") && <option value="current">◎ {p.currentCell}</option>}
                   {Object.entries(ARROWS).map(([dir, arrow]) => <option value={dir} key={dir}>{arrow} {m.actions[dir as keyof typeof ARROWS]}</option>)}
                 </select>
               </span> : <span className="pg-current-cell" title={p.self} aria-label={p.self}>●</span>}
@@ -186,7 +186,7 @@ export function CompactParallelEditor({ level, program, focus, onEdit, locale }:
               </select>}
               <select className="pg-block-select pg-condition-select" value={c.condition.kind} aria-label={`${p.condition} ${num}`} title={p.conditions[c.condition.kind]}
                 onChange={(e) => changeNode(path, (node) => node.op === "if" ? { ...node, condition: changeParallelConditionKind(node.condition, e.target.value as ParallelCondition["kind"]) } : node)}>
-                {(["wall", "boundary", "robot", "goal", ...(level.delivery ? ["item", "holding"] as const : []), ...(level.delivery?.numbers ? ["value"] as const : [])] as const).map((kind) => <option value={kind} key={kind}>{p.shortConditions[kind]}</option>)}
+                {(["wall", "boundary", "robot", "goal", ...(level.delivery ? ["delivery", "item", "holding"] as const : []), ...(level.delivery?.numbers ? ["value"] as const : [])] as const).map((kind) => <option value={kind} key={kind}>{p.shortConditions[kind]}</option>)}
               </select>
             </>}
             {nodeMenu(c, index, list, parent)}

@@ -35,7 +35,7 @@ describe("robot course transfer", () => {
     expect(a.levels[0].blockId).not.toBe(source.levels[0].blockId);
     expect(source.status).toBe("PUBLISHED");
   });
-  it("never executes references during export/import; incomplete solutions need manual verification", () => {
+  it("never executes references during export/import; authoritative save validation rejects incomplete solutions", () => {
     const source = example(); source.levels[0].payload.referenceProgram = [{ op: "end" }];
     const spy = vi.spyOn(engine, "executeParallelProgram");
     try {
