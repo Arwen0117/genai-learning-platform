@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ auth: vi.fn(), find: vi.fn(), create: vi.fn(), update: vi.fn(), lessonUpdate: vi.fn(), lessonCreate: vi.fn(), stamp: vi.fn(), transaction: vi.fn(), enrolled: vi.fn(), progress: vi.fn(), generate: vi.fn() }));
+const m = vi.hoisted(() => ({ auth: vi.fn(), find: vi.fn(), create: vi.fn(), update: vi.fn(), lessonUpdate: vi.fn(), lessonCreate: vi.fn(), eligible: vi.fn(), overrides: vi.fn(), lessonDelete: vi.fn(), stamp: vi.fn(), transaction: vi.fn(), enrolled: vi.fn(), progress: vi.fn(), generate: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ auth: m.auth }));
 vi.mock("@/lib/prisma", () => ({ prisma: { course: { findUnique: m.find }, enrollment: { findUnique: m.enrolled }, lessonProgress: { findMany: m.progress }, $transaction: m.transaction } }));
 vi.mock("@/lib/llm/provider", () => ({ generateJson: m.generate, isMockMode: () => true }));
@@ -17,8 +17,9 @@ function fixture() {
 beforeEach(() => {
   vi.resetAllMocks(); m.auth.mockResolvedValue({ user: { id: "teacher", role: "INSTRUCTOR" } }); m.find.mockResolvedValue(null);
   m.create.mockImplementation(async ({ data }) => ({ id: data.id, updatedAt: new Date("2026-11-02T00:00:00.000Z") }));
+  m.eligible.mockImplementation(async ({ where }) => where.id.in.length); m.overrides.mockResolvedValue(0); m.lessonDelete.mockImplementation(async ({ where }) => ({ count: where.id.in.length }));
   m.update.mockResolvedValue({ count: 1 }); m.stamp.mockResolvedValue({ updatedAt: new Date("2026-11-02T01:00:00.000Z") });
-  m.transaction.mockImplementation((fn) => fn({ course: { findUnique: m.find, create: m.create, updateMany: m.update, findUniqueOrThrow: m.stamp }, lesson: { update: m.lessonUpdate, create: m.lessonCreate } }));
+  m.transaction.mockImplementation((fn) => fn({ course: { findUnique: m.find, create: m.create, updateMany: m.update, findUniqueOrThrow: m.stamp }, lesson: { update: m.lessonUpdate, create: m.lessonCreate, count: m.eligible, deleteMany: m.lessonDelete }, userBlockOverride: { count: m.overrides } }));
   m.enrolled.mockResolvedValue({ id: "enrollment" }); m.progress.mockResolvedValue([]); m.generate.mockResolvedValue({ hints: ["[MOCK] Observe first"] });
 });
 describe("dedicated course persistence", () => {
@@ -120,5 +121,47 @@ describe("delivery course persistence and hint boundaries", () => {
   it("loads saved parcel starts, destinations and reference without losing fields", async () => {
     const { p, row } = fixture(); const payload = createDeliveryPayload("zh"); p.levels[0].payload = payload; row.modules[0].lessons[0].blocks[0].payload = payload; m.find.mockResolvedValue(row);
     expect((await loadRobotCourseDraft(row.id))?.draft.levels[0].payload).toEqual(payload);
+  });
+});
+
+describe("robot level deletion and ordering", () => {
+  it("persists a new order while preserving all lesson and block identities", async () => {
+    const { p, row } = fixture(); m.find.mockResolvedValue(row);
+    p.levels.reverse(); expect(await saveRobotCourse(row.id, p)).toMatchObject({ ok: true });
+    for (const [order, level] of p.levels.entries()) expect(m.lessonUpdate.mock.calls[order][0]).toMatchObject({ where: { id: level.lessonId }, data: { order, blocks: [{ id: level.blockId }] } });
+    expect(m.lessonDelete).not.toHaveBeenCalled(); expect(m.eligible).not.toHaveBeenCalled();
+  });
+  it("deletes only explicitly acknowledged history-free levels and reindexes the remainder", async () => {
+    const { p, row } = fixture(); m.find.mockResolvedValue(row); const removed = p.levels.splice(2, 1)[0];
+    expect(await saveRobotCourse(row.id, p, [removed.lessonId])).toMatchObject({ ok: true });
+    expect(m.eligible.mock.calls[0][0].where).toMatchObject({ id: { in: [removed.lessonId] }, moduleId: "module", progress: { none: {} }, activityAttempts: { none: {} }, playthroughs: { none: {} }, gameActivityVersions: { none: {} }, feedback: { none: {} } });
+    expect(m.overrides).toHaveBeenCalledWith({ where: { lessonId: { in: [removed.lessonId] } } });
+    expect(m.lessonDelete.mock.calls[0][0].where).toEqual(m.eligible.mock.calls[0][0].where);
+    expect(m.lessonUpdate).toHaveBeenCalledTimes(6); expect(m.lessonUpdate.mock.calls[2][0].data.order).toBe(2);
+    expect(m.transaction.mock.calls[0][1]).toMatchObject({ isolationLevel: "Serializable" });
+  });
+  it.each(["records", "overrides"])("protects lessons with %s before writing course or lessons", async (kind) => {
+    const { p, row } = fixture(); m.find.mockResolvedValue(row); const removed = p.levels.pop()!;
+    if (kind === "records") m.eligible.mockResolvedValue(0); else m.overrides.mockResolvedValue(1);
+    expect(await saveRobotCourse(row.id, p, [removed.lessonId])).toMatchObject({ ok: false, error: expect.stringContaining("learning records") });
+    expect(m.update).not.toHaveBeenCalled(); expect(m.lessonDelete).not.toHaveBeenCalled(); expect(m.lessonUpdate).not.toHaveBeenCalled();
+  });
+  it.each(["wrong", "extra", "duplicate"])("rejects mismatched deletion acknowledgement: %s", async (kind) => {
+    const { p, row } = fixture(); m.find.mockResolvedValue(row); const removed = p.levels.pop()!;
+    const ids = kind === "wrong" ? [id()] : kind === "extra" ? [removed.lessonId, id()] : [removed.lessonId, removed.lessonId];
+    expect(await saveRobotCourse(row.id, p, ids)).toMatchObject({ ok: false }); expect(m.update).not.toHaveBeenCalled(); expect(m.lessonDelete).not.toHaveBeenCalled();
+  });
+  it("rejects removing every level before entering the transaction", async () => {
+    const { p, row } = fixture(); const ids = p.levels.map((l) => l.lessonId); p.levels = [];
+    expect(await saveRobotCourse(row.id, p, ids)).toMatchObject({ ok: false }); expect(m.transaction).not.toHaveBeenCalled();
+  });
+  it.each(["owner", "stale"])("rejects %s deletions without inspecting or mutating lessons", async (kind) => {
+    const { p, row } = fixture(); m.find.mockResolvedValue(row); const removed = p.levels.pop()!;
+    if (kind === "owner") row.createdById = "other"; else p.updatedAt = "2020-01-01T00:00:00.000Z";
+    expect(await saveRobotCourse(row.id, p, [removed.lessonId])).toMatchObject({ ok: false }); expect(m.eligible).not.toHaveBeenCalled(); expect(m.lessonDelete).not.toHaveBeenCalled();
+  });
+  it("stops when the final guarded deletion finds a newly protected lesson", async () => {
+    const { p, row } = fixture(); m.find.mockResolvedValue(row); const removed = p.levels.pop()!; m.lessonDelete.mockResolvedValue({ count: 0 });
+    expect(await saveRobotCourse(row.id, p, [removed.lessonId])).toMatchObject({ ok: false }); expect(m.lessonUpdate).not.toHaveBeenCalled();
   });
 });
