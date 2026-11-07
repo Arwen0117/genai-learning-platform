@@ -116,9 +116,24 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
 
   if (isRobotCourse(course)) redirect(`/play/programming/${course.id}?level=${encodeURIComponent(lessonId)}${canPreview ? "&preview=1" : ""}`);
 
-  // Learner-generated courses are private to their author (P4.7): guessing the
-  // id of somebody else's mini-course must not reveal even its outline.
-  if (course.source === "LEARNER" && course.createdById !== userId) {
+  // Preview never enrolls the teacher, so there is intentionally no enrollment
+  // lookup in this branch. The lookup has to happen before the private-course
+  // gate below: an Enrollment is exactly what makes a shared link legitimate.
+  const enrollment = canPreview
+    ? null
+    : await prisma.enrollment.findUnique({
+        where: { userId_courseId: { userId, courseId } },
+        select: { completedAt: true },
+      });
+
+  // Learner-generated courses stay out of the catalog and are private to their
+  // author (P4.7), but an invited learner is enrolled and must be able to open
+  // the lesson. Guessing the id without an Enrollment still reveals nothing.
+  if (
+    course.source === "LEARNER" &&
+    course.createdById !== userId &&
+    enrollment === null
+  ) {
     notFound();
   }
 
@@ -137,15 +152,6 @@ async function LessonPlayer({ params, searchParams }: LessonPageProps) {
   if (lesson === undefined) {
     notFound();
   }
-
-  // Preview never enrolls the teacher, so there is intentionally no enrollment
-  // lookup in this branch.
-  const enrollment = canPreview
-    ? null
-    : await prisma.enrollment.findUnique({
-        where: { userId_courseId: { userId, courseId } },
-        select: { completedAt: true },
-      });
 
   // Not enrolled yet: show the same course page with a prompt instead of the
   // lesson, so a shared player URL never dead-ends.
