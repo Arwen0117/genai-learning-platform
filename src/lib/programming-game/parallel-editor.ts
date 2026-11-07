@@ -9,7 +9,15 @@ export type ParallelInsertOp = ParallelLevel["allowed"][number];
 export type ParallelEditorParent = number | number[];
 export const countParallelNodes = countParallelProgramNodes;
 export function parallelLabels(program: ParallelProgram): string[] {
-  return program.filter((c) => c.op === "label").map((c) => c.id);
+  const labels: string[] = [];
+  function visit(list: ParallelProgram) {
+    for (const c of list) {
+      if (c.op === "label") labels.push(c.id);
+      else if (c.op === "if") { visit(c.then); visit(c.else); }
+    }
+  }
+  visit(program);
+  return labels;
 }
 function nextLabel(program: ParallelProgram): string {
   const used = new Set(parallelLabels(program));
@@ -35,11 +43,11 @@ function context(program: ParallelProgram, parent?: ParallelEditorParent) {
   if (path.length > 1 + 2 * PARALLEL_IF_DEPTH || path.some((n) => !Number.isInteger(n) || n < 0)) return null;
   let list = program;
   let kind: "root" | "repeat" | "branch" = "root";
-  let ifDepth = 0;
+  let ifDepth = 0, inRepeat = false;
   for (let i = 0; i < path.length; i++) {
     const node = list[path[i]];
     if (!node) return null;
-    if (node.op === "repeat") { list = node.body; kind = "repeat"; }
+    if (node.op === "repeat") { if (inRepeat) return null; inRepeat = true; list = node.body; kind = "repeat"; }
     else if (node.op === "if") {
       if (++ifDepth > PARALLEL_IF_DEPTH) return null;
       const arm = path[++i];
@@ -47,7 +55,7 @@ function context(program: ParallelProgram, parent?: ParallelEditorParent) {
       list = arm === 0 ? node.then : node.else; kind = "branch";
     } else return null;
   }
-  return { list, kind, ifDepth };
+  return { list, kind, ifDepth, inRepeat };
 }
 export function getParallelEditorList(program: ParallelProgram, parent?: ParallelEditorParent): ParallelProgram | null {
   return context(program, parent)?.list ?? null;
@@ -86,7 +94,7 @@ export function insertParallelCommand(
       !Number.isInteger(index) || index < 0) return null;
   const target = context(program, parent);
   if (!target || index > target.list.length ||
-      ((op === "repeat" || op === "label") && target.kind !== "root") ||
+      (op === "label" && target.inRepeat) || (op === "repeat" && target.inRepeat) ||
       (op === "if" && target.ifDepth >= PARALLEL_IF_DEPTH)) return null;
   const command: ParallelCommand = op === "repeat" ? { op: "repeat", count: 2, body: [] }
     : op === "if" ? { op: "if", condition: { kind: "wall", direction: "right", not: false }, then: [], else: [] }
@@ -108,14 +116,14 @@ export function moveParallelCommand(
   if (!node || !target || index > target.list.length || countParallelNodes(program) > PARALLEL_LIMITS.nodes) return null;
   const prefix = (a: number[], b: number[]) => a.length <= b.length && a.every((n, i) => n === b[i]);
   if (prefix(source, destination)) return null; // Never put a container inside itself.
-  function accepts(c: ParallelCommand, kind: "root" | "repeat" | "branch", depth: number): boolean {
+  function accepts(c: ParallelCommand, kind: "root" | "repeat" | "branch", depth: number, inRepeat: boolean): boolean {
     if (!allowed.includes(c.op)) return false;
-    if (c.op === "label") return kind === "root";
-    if (c.op === "repeat") return kind === "root" && c.body.every((child) => accepts(child, "repeat", depth));
-    if (c.op === "if") return depth < PARALLEL_IF_DEPTH && [...c.then, ...c.else].every((child) => accepts(child, "branch", depth + 1));
+    if (c.op === "label") return !inRepeat;
+    if (c.op === "repeat") return !inRepeat && c.body.every((child) => accepts(child, "repeat", depth, true));
+    if (c.op === "if") return depth < PARALLEL_IF_DEPTH && [...c.then, ...c.else].every((child) => accepts(child, "branch", depth + 1, inRepeat));
     return true;
   }
-  if (!accepts(node, target.kind, target.ifDepth)) return null;
+  if (!accepts(node, target.kind, target.ifDepth, target.inRepeat)) return null;
   const sameList = sourceParent.length === destination.length && prefix(sourceParent, destination);
   if (sameList && (index === sourceIndex || index === sourceIndex + 1)) return program;
   const rebased = [...destination];

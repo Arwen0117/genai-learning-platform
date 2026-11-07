@@ -83,9 +83,9 @@ describe("named jump destinations", () => {
     expect(() => executeParallelProgram(level(), [{ op: "label", id }])).toThrow("INVALID_LABEL");
     expect(() => executeParallelProgram(level(), [{ op: "jump", target: id }])).toThrow("INVALID_JUMP_TARGET");
   });
-  it("keeps markers at root; does not allow jumping to interior line numbers", () => {
+  it("rejects markers inside repeats but accepts IF branch markers", () => {
     expect(() => parseParallelProgram([{ op: "repeat", count: 1, body: [{ op: "label", id: "A" }] }], level())).toThrow("INVALID_ACTION");
-    expect(() => parseParallelProgram([{ op: "if", condition: { kind: "goal", not: false }, then: [{ op: "label", id: "A" }], else: [] }], level())).toThrow("INVALID_ACTION");
+    expect(() => parseParallelProgram([{ op: "if", condition: { kind: "goal", not: false }, then: [{ op: "label", id: "A" }], else: [] }], level())).not.toThrow();
   });
   it("enforces capabilities and ignores forged compiled destinations", () => {
     expect(() => executeParallelProgram(level({ allowed: ["wait"] }), [{ op: "label", id: "A" }])).toThrow("DISALLOWED_LABEL");
