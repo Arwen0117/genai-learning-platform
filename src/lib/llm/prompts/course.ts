@@ -55,13 +55,123 @@ export const generatedLessonSchema = z
     }
   });
 
+const GAME_VARIANT_ALIASES: Record<string, "sort" | "match" | "choose"> = {
+  sort: "sort",
+  sorting: "sort",
+  order: "sort",
+  ordering: "sort",
+  sequence: "sort",
+  match: "match",
+  matching: "match",
+  pair: "match",
+  pairs: "match",
+  pairing: "match",
+  choose: "choose",
+  choice: "choose",
+  select: "choose",
+  selection: "choose",
+  quiz: "choose",
+  mcq: "choose",
+  "multiple choice": "choose",
+  multiple_choice: "choose",
+  "multiple-choice": "choose",
+};
+
+/** Maps common LLM spellings onto the three Challenge discriminators. */
+function coerceGameVariant(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+  return GAME_VARIANT_ALIASES[value.trim().toLowerCase()] ?? value;
+}
+
+/**
+ * Course-generation only: reshape loose LLM Challenges into the schema shape.
+ * Stored editor data already uses the canonical literals.
+ */
+function normalizeChallenge(challenge: unknown): unknown {
+  if (challenge === null || typeof challenge !== "object") {
+    return challenge;
+  }
+  const block = challenge as Record<string, unknown>;
+  const rawPayload =
+    block.payload !== null && typeof block.payload === "object"
+      ? { ...(block.payload as Record<string, unknown>) }
+      : null;
+
+  // Models often flatten Challenge fields instead of nesting them under payload.
+  const payload =
+    rawPayload ??
+    ({
+      variant: block.variant ?? block.kind ?? block.format,
+      items: block.items,
+      pairs: block.pairs,
+      prompt: block.prompt,
+      options: block.options,
+      feedback: block.feedback,
+      hint: block.hint,
+      supportingMedia: block.supportingMedia,
+    } as Record<string, unknown>);
+
+  if (payload.variant === undefined) {
+    payload.variant = block.variant ?? block.kind ?? block.format;
+  }
+  payload.variant = coerceGameVariant(payload.variant);
+
+  return {
+    id: block.id,
+    title: block.title,
+    type: "game",
+    payload,
+  };
+}
+
+function normalizeLearnerCourseInput(value: unknown): unknown {
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  const course = value as Record<string, unknown>;
+  if (!Array.isArray(course.lessons)) {
+    return value;
+  }
+
+  return {
+    ...course,
+    lessons: course.lessons.map((lesson) => {
+      if (lesson === null || typeof lesson !== "object") {
+        return lesson;
+      }
+      const row = lesson as Record<string, unknown>;
+      const activity = row.gameActivity;
+      if (activity === null || typeof activity !== "object") {
+        return lesson;
+      }
+      const container = activity as Record<string, unknown>;
+      if (!Array.isArray(container.challenges)) {
+        return lesson;
+      }
+
+      return {
+        ...row,
+        gameActivity: {
+          ...container,
+          challenges: container.challenges.map(normalizeChallenge),
+        },
+      };
+    }),
+  };
+}
+
 /** The complete course-shaped response the model has to return. */
-export const learnerCourseSchema = z.object({
-  title: z.string().min(3).max(90),
-  description: z.string().min(20).max(500),
-  difficulty: z.enum(["beginner", "intermediate", "advanced"]),
-  lessons: z.array(generatedLessonSchema).length(3),
-});
+export const learnerCourseSchema = z.preprocess(
+  normalizeLearnerCourseInput,
+  z.object({
+    title: z.string().min(3).max(90),
+    description: z.string().min(20).max(500),
+    difficulty: z.enum(["beginner", "intermediate", "advanced"]),
+    lessons: z.array(generatedLessonSchema).length(3),
+  }),
+);
 
 export type LearnerCourse = z.infer<typeof learnerCourseSchema>;
 
@@ -96,13 +206,14 @@ export function learnerCoursePrompt(
     "   options, answer as an array containing one index, and a one-sentence",
     "   explanation.",
     "The Game Activity must be answerable from that lesson's reading and quiz",
-    "content. Include Sort, Match, and Choose Challenges across the activity,",
-    "with deterministic answer metadata, correct and incorrect feedback, Hints,",
-    "and locale-consistent accessible wording.",
+    "content. Each lesson's gameActivity.challenges has exactly 5 Challenges.",
+    "Across those five, include at least one of each payload.variant",
+    '"sort", "match", and "choose" (lowercase only — never "Sort" or "quiz").',
+    "Every Challenge needs feedback.correct, feedback.incorrect, and a hint.",
     "",
     "Rules:",
     "- Block ids look like \"blk_l1_reading\" and \"blk_l1_quiz\".",
-    "- Question ids look like \"q_l1_1\".",
+    "- Question ids look like \"q_l1_1\". Challenge ids look like \"chal_l1_1\".",
     "- Every lesson title is concrete (\"Tea arrives in Taiwan\"), never \"Lesson 1\".",
     "- Factual claims must be things a careful encyclopedia would agree with; hedge",
     "  disputed origin stories instead of picking a winner.",
@@ -118,15 +229,21 @@ export function learnerCoursePrompt(
     "Block shapes:",
     'reading: {"id": string, "title": string, "type": "reading",',
     '          "payload": {"markdown": string}}',
-    'flashcards: {"id": string, "title": string, "type": "flashcards",',
-    '             "payload": {"cards": [{"front": string, "back": string}]}}',
-    'gameActivity: {"id": string, "title": string, "challenges":',
-    '              "Game Activity Challenges[]"}',
     'quiz: {"id": string, "title": string, "type": "quiz",',
     '       "payload": {"passScore": 0.7, "questions": [{"id": string,',
     '                    "kind": "single", "prompt": string,',
     '                    "options": [string, string, string, string],',
     '                    "answer": [number], "explanation": string}]}}',
+    'gameActivity: {"id": string, "title": string, "challenges": [Challenge, ...5]}',
+    'Challenge: {"id": string, "title": string, "type": "game", "payload": Payload}',
+    'sort payload: {"variant": "sort", "items": [{"text": string, "order": number}, ...],',
+    '              "feedback": {"correct": string, "incorrect": string}, "hint": string}',
+    'match payload: {"variant": "match", "pairs": [{"left": string, "right": string}, ...],',
+    '               "feedback": {"correct": string, "incorrect": string}, "hint": string}',
+    'choose payload: {"variant": "choose", "prompt": string,',
+    '                "options": [{"text": string, "correct": boolean}, ...],',
+    '                "feedback": {"correct": string, "incorrect": string}, "hint": string}',
+    "Choose options: exactly one correct:true and at least two correct:false.",
   ].join("\n");
 }
 

@@ -156,6 +156,44 @@ async function defaultComplete(request: LlmCompleteRequest): Promise<string> {
   return text;
 }
 
+/**
+ * End index of the first complete JSON value starting at `start`.
+ * Ignores braces inside strings so trailing model prose cannot extend the slice.
+ */
+function findJsonEnd(text: string, start: number): number {
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (inString) {
+      if (escape) {
+        escape = false;
+      } else if (ch === "\\") {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      depth += 1;
+    } else if (ch === "}" || ch === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+
+  return -1;
+}
+
 /** Strips markdown fences and any prose wrapped around the JSON value. */
 export function extractJsonPayload(raw: string): string {
   const trimmed = raw.trim();
@@ -171,9 +209,9 @@ export function extractJsonPayload(raw: string): string {
   }
 
   const start = Math.min(...candidates);
-  const end = Math.max(body.lastIndexOf("}"), body.lastIndexOf("]"));
+  const end = findJsonEnd(body, start);
 
-  return end > start ? body.slice(start, end + 1) : body.slice(start);
+  return end >= start ? body.slice(start, end + 1) : body.slice(start);
 }
 
 function describeIssues(error: ZodError): string[] {
