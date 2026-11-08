@@ -21,10 +21,11 @@ export function gameActivityPrompt(input: {
 }): string {
   return [
     "Create one structured Game Activity for the lesson below.",
-    "Return exactly five ordered Game Activity Challenges: use Sort, Match, and Choose formats.",
+    "Return exactly five ordered Challenges. payload.variant must be lowercase",
+    '"sort", "match", or "choose" only — include at least one of each across the five.',
     "Every Challenge must be answerable from the source content, with deterministic",
-    "answer metadata, correct and incorrect instructional feedback, and an optional hint.",
-    "Choose Challenges must contain at least two plausible distractors.",
+    "answer metadata, correct and incorrect instructional feedback, and a hint.",
+    "Choose Challenges must contain exactly one correct option and at least two distractors.",
     "Use accessible plain-language labels and avoid relying on color, position, or sound.",
     "Do not make media the sole answer key, option distinction, Correction, Hint, or feedback source.",
     "Supporting media is optional; if included, it must be approved, safety-moderated, and carry provenance.",
@@ -36,7 +37,16 @@ export function gameActivityPrompt(input: {
     `Objectives: ${input.objectives}`,
     `Source content: ${input.sourceContent}`,
     "",
-    "Reply with a JSON object containing an id, title, and challenges array of five Game Activity Challenges. Do not use placeholders.",
+    'Reply shape: {"id": string, "title": string, "challenges": [Challenge x5]}',
+    'Challenge: {"id": string, "title": string, "type": "game", "payload": Payload}',
+    'sort: {"variant": "sort", "items": [{"text": string, "order": number}, ...],',
+    '       "feedback": {"correct": string, "incorrect": string}, "hint": string}',
+    'match: {"variant": "match", "pairs": [{"left": string, "right": string}, ...],',
+    '        "feedback": {"correct": string, "incorrect": string}, "hint": string}',
+    'choose: {"variant": "choose", "prompt": string,',
+    '         "options": [{"text": string, "correct": boolean}, ...],',
+    '         "feedback": {"correct": string, "incorrect": string}, "hint": string}',
+    "Do not use placeholders.",
   ].join("\n");
 }
 

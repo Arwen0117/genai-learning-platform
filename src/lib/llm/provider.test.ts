@@ -4,6 +4,7 @@ import { z } from "zod";
 import { MOCK_MARKER, mockText, registerMock } from "@/lib/llm/mock";
 import type { LlmCompleteRequest } from "@/lib/llm/provider";
 import {
+  extractJsonPayload,
   generateJson,
   isMockMode,
   LlmValidationError,
@@ -76,6 +77,18 @@ afterEach(() => {
       process.env[key] = value;
     }
   }
+});
+
+describe("extractJsonPayload", () => {
+  it("keeps the first JSON object and drops trailing prose", () => {
+    expect(
+      extractJsonPayload('{"title":"T","body":"B"}\nNote: use } carefully.'),
+    ).toBe('{"title":"T","body":"B"}');
+  });
+
+  it("keeps the first object when a second object follows", () => {
+    expect(extractJsonPayload('{"a":1}{"b":2}')).toBe('{"a":1}');
+  });
 });
 
 describe("llmBaseUrl", () => {

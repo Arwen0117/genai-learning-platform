@@ -77,8 +77,11 @@ describe("game activity validation", () => {
       language: "en",
     });
 
-    expect(prompt).toContain("Game Activity Challenges");
-    expect(prompt).toContain("JSON object");
+    expect(prompt).toContain("Game Activity");
+    expect(prompt).toContain('"variant": "sort"');
+    expect(prompt).toContain('"variant": "match"');
+    expect(prompt).toContain('"variant": "choose"');
+    expect(prompt).toContain("challenges");
   });
 
   it("generates one explicit Game Activity container", () => {

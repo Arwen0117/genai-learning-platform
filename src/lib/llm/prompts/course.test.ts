@@ -23,6 +23,65 @@ describe("learnerCoursePrompt", () => {
     );
   });
 
+  it("spells out lowercase Challenge variants and payload shapes", () => {
+    const prompt = learnerCoursePrompt("Tea history", "");
+
+    expect(prompt).toContain('"variant": "sort"');
+    expect(prompt).toContain('"variant": "match"');
+    expect(prompt).toContain('"variant": "choose"');
+    expect(prompt).toContain('lowercase only');
+  });
+});
+
+describe("learnerCourseSchema variant coercion", () => {
+  it("lowercases Challenge variants when the payload shape already matches", () => {
+    const sample = structuredClone(course) as {
+      lessons: Array<{
+        gameActivity: {
+          challenges: Array<{ payload: { variant: string } }>;
+        };
+      }>;
+    };
+    const original = sample.lessons[0]!.gameActivity.challenges.map(
+      (challenge) => challenge.payload.variant,
+    );
+    for (const lesson of sample.lessons) {
+      for (const challenge of lesson.gameActivity.challenges) {
+        challenge.payload.variant = challenge.payload.variant.toUpperCase();
+      }
+    }
+
+    const parsed = learnerCourseSchema.safeParse(sample);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) {
+      return;
+    }
+    expect(
+      parsed.data.lessons[0]!.gameActivity.challenges.map(
+        (challenge) => challenge.payload.variant,
+      ),
+    ).toEqual(original);
+  });
+
+  it("nests flattened Challenge fields under payload", () => {
+    const sample = structuredClone(course);
+    const first = sample.lessons[0]!.gameActivity.challenges[0]!;
+    const flat = {
+      id: first.id,
+      title: first.title,
+      variant: "SORT",
+      items: first.payload.variant === "sort" ? first.payload.items : [],
+      feedback: first.payload.feedback,
+      hint: first.payload.hint,
+    };
+    sample.lessons[0]!.gameActivity.challenges[0] = flat as never;
+
+    const parsed = learnerCourseSchema.safeParse(sample);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.lessons[0]!.gameActivity.challenges[0]!.payload.variant).toBe(
+      "sort",
+    );
+  });
 });
 
 describe("mockLearnerCourse", () => {
