@@ -11,8 +11,9 @@ export function ParallelProgrammingActivity({ payload, title, lessonId, blockId,
   payload: ParallelProgrammingPayload; title: string; lessonId: string; blockId: string; preview: boolean; onPassed?: () => void;
 }) {
   const { locale } = useI18n(), router = useRouter(), m = GAME_MESSAGES[locale];
-  return <ParallelProgrammingGame course teaching={parallelProgrammingTeaching(payload, locale)} level={parallelProgrammingLevel(payload)} title={title} task={payload.task}
-    hints={payload.hints} knowledge={payload.knowledge} reference={parallelProgrammingReference(payload)} locale={locale} onLocalPassed={preview ? onPassed : undefined}
+  const reference = parallelProgrammingReference(payload);
+  return <ParallelProgrammingGame key={`${lessonId}:${payload.tutorial === true}`} course tutorial={payload.tutorial} initialProgram={payload.tutorial ? reference : undefined} teaching={parallelProgrammingTeaching(payload, locale)} level={parallelProgrammingLevel(payload)} title={title} task={payload.task}
+    hints={payload.hints} knowledge={payload.knowledge} reference={reference} locale={locale} onLocalPassed={preview ? onPassed : undefined}
     onSubmit={preview ? undefined : async ({ attemptId, program }) => {
       const levelVersion = await parallelProgrammingVersion(payload);
       const result = await postJson<ProgrammingSubmitResult>("/api/activities", { lessonId, blockId, submission: { attemptId, answer: { program, levelVersion } } },

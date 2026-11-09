@@ -18,7 +18,7 @@ import { ProgrammingConcepts, ProgrammingPseudocode } from "./ProgrammingTeachin
 import { WORKSHOP_MESSAGES } from "./workshop-messages";
 import type { ParallelInsertOp } from "@/lib/programming-game/parallel-editor";
 
-type Props = { teaching?: ProgrammingTeaching; level: ParallelLevel; title: string; task: string; locale: "en" | "zh"; hints?: string[]; reference?: ParallelProgram; onNext?: () => void; course?: boolean; initialProgram?: ParallelProgram; onProgramChange?: (program: ParallelProgram) => void; onValidationResult?: (passed: boolean) => void; onLocalPassed?: () => void; knowledge?: KnowledgeCard[]; onSubmit?: (run: { attemptId: string; program: ParallelProgram }) => Promise<ProgrammingSubmitResult> };
+type Props = { tutorial?: boolean; teaching?: ProgrammingTeaching; level: ParallelLevel; title: string; task: string; locale: "en" | "zh"; hints?: string[]; reference?: ParallelProgram; onNext?: () => void; course?: boolean; initialProgram?: ParallelProgram; onProgramChange?: (program: ParallelProgram) => void; onValidationResult?: (passed: boolean) => void; onLocalPassed?: () => void; knowledge?: KnowledgeCard[]; onSubmit?: (run: { attemptId: string; program: ParallelProgram }) => Promise<ProgrammingSubmitResult> };
 const SELECT = "h-9 max-w-full rounded-lg border border-input bg-background px-2 text-sm";
 
 /** Shared workshop/course player; only the course wrapper supplies submission. */
@@ -30,7 +30,7 @@ export function ParallelProgrammingGame(props: Props) {
   return <ParallelSession key={JSON.stringify(props.level)} {...props} teaching={teaching} />;
 }
 
-function ParallelSession({ teaching, level, title, task, locale, hints = [], reference, onNext, course = false, knowledge = [], onSubmit, onLocalPassed, initialProgram = [], onProgramChange, onValidationResult }: Props) {
+function ParallelSession({ tutorial = false, teaching, level, title, task, locale, hints = [], reference, onNext, course = false, knowledge = [], onSubmit, onLocalPassed, initialProgram = [], onProgramChange, onValidationResult }: Props) {
   const w = WORKSHOP_MESSAGES[locale];
   const m = GAME_MESSAGES[locale]; const p = PARALLEL_MESSAGES[locale];
   const [state, dispatch] = useReducer(parallelPlayerReducer, level, (value) => ({ ...initialParallelPlayer(value), program: initialProgram }));
@@ -138,6 +138,11 @@ function ParallelSession({ teaching, level, title, task, locale, hints = [], ref
     </div>
     </div>
     <div className="pg-game-console min-w-0 space-y-4">
+    {tutorial && <section className="space-y-2 rounded-lg border bg-muted/20 p-3" aria-label={locale === "zh" ? "教学演示" : "Tutorial demonstration"}>
+      <h3 className="font-semibold">{locale === "zh" ? "教学关 · 参考程序已加载" : "Tutorial · Reference program loaded"}</h3>
+      <p className="text-sm">{locale === "zh" ? "点击运行观看程序效果，使用暂停、世界单步和速度选项观察高亮模块及机器人状态。可修改程序进行试验，或恢复教师参考答案。" : "Run the program to watch it work. Pause, step or slow down to inspect highlighted blocks and robot state. Experiment with edits or restore the instructor's answer."}</p>
+      {reference && <Button type="button" variant="outline" onClick={() => edit(parseParallelProgram(reference, level))}>{locale === "zh" ? "恢复参考程序" : "Restore reference program"}</Button>}
+    </section>}
     <CompactParallelEditor key={program.length ? "filled" : "empty"} level={level} program={program} focus={focus} onEdit={edit} locale={locale} />
     <div className="flex flex-wrap items-center gap-2">
       <Button type="button" disabled={!program.length} onClick={() => begin("run")}>{execution ? m.restart : m.run}</Button>
@@ -167,7 +172,7 @@ function ParallelSession({ teaching, level, title, task, locale, hints = [], ref
     </div>}
     {terminal && course && !onSubmit && <p className="text-sm text-muted-foreground">{m.local}</p>}
     <details className="pg-learning-panel"><summary>{w.hints}</summary><ol className="list-decimal space-y-2 pl-5">{hints.map((hint, i) => <li key={i}>{hint}</li>)}</ol></details>
-    {reference && <details className="pg-learning-panel"><summary>{w.answer}</summary><p className="my-2 text-sm">{w.answerNote}</p><AnswerProgram program={reference} locale={locale} /><Button type="button" className="mt-3" variant="outline" title={w.replace} onClick={() => edit(parseParallelProgram(reference, level))}>{w.use}</Button></details>}
+    {reference && <details key={tutorial ? "tutorial-answer" : "challenge-answer"} open={tutorial ? true : undefined} className="pg-learning-panel"><summary>{w.answer}</summary><p className="my-2 text-sm">{w.answerNote}</p><AnswerProgram program={reference} locale={locale} /><Button type="button" className="mt-3" variant="outline" title={w.replace} onClick={() => edit(parseParallelProgram(reference, level))}>{w.use}</Button></details>}
     {state.inputError && <p role="alert" className="text-sm text-destructive">{p.errors[state.inputError] ?? state.inputError}</p>}
     </div>
     </div>

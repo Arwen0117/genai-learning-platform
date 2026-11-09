@@ -39,3 +39,12 @@ describe("C2 explicit v2 configuration foundation", () => {
     expect(parallelProgrammingPayloadSchema.safeParse(p).success).toBe(false);
   });
 });
+
+it("validates tutorial metadata without changing legacy challenge hashes", async () => {
+  const p = createParallelProgrammingPayload("parallel-lanes", "en");
+  expect(parallelProgrammingPayloadSchema.safeParse({ ...p, tutorial: true }).success).toBe(true);
+  expect(parallelProgrammingPayloadSchema.safeParse({ ...p, tutorial: "true" }).success).toBe(false);
+  expect(await parallelProgrammingVersion({ ...p, tutorial: false })).toBe(await parallelProgrammingVersion(p));
+  expect(await parallelProgrammingVersion({ ...p, tutorial: true })).not.toBe(await parallelProgrammingVersion(p));
+  expect(parallelProgrammingPayloadSchema.safeParse({ ...p, tutorial: true, customLevel: parallelProgrammingLevel(p), referenceProgram: [{ op: "end" }] }).success).toBe(false);
+});
