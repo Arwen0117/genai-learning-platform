@@ -950,7 +950,7 @@ export function CourseEditor({ course }: { course: EditorCourse }) {
               {t("course.previewAsStudent")}
             </Link>
 
-            {draft.status === "PUBLISHED" ? (
+            {draft.status === "PUBLISHED" && draft.source !== "LEARNER" ? (
               <Link
                 className={cn(
                   buttonVariants({ variant: "outline" }),

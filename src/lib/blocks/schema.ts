@@ -378,7 +378,8 @@ export const simulationOptionSchema = z.object({
  */
 export const simulationNodeSchema = z.object({
   text: z.string().min(1),
-  options: z.array(simulationOptionSchema),
+  // Models often omit options on the end node; treat missing as [].
+  options: z.array(simulationOptionSchema).default([]),
   motion: simulationMotionDefaultsSchema.optional(),
   supportingMedia: simulationSupportingMediaSchema.optional(),
 });

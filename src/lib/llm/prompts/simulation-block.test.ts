@@ -23,6 +23,7 @@ describe("simulationBlockPrompt", () => {
     expect(prompt).toContain("emphasis-pulse");
     expect(prompt).toContain("Never invent Supporting media URLs");
     expect(prompt).toContain("Do not include supportingMedia");
+    expect(prompt).toContain('"options": []');
   });
 });
 
@@ -30,6 +31,27 @@ describe("generatedSimulationBlockSchema", () => {
   it("accepts a catalog-motion Simulation with no Supporting media", () => {
     const block = mockSimulationBlock("en");
     expect(generatedSimulationBlockSchema.safeParse(block).success).toBe(true);
+  });
+
+  it("accepts an end node that omits options", () => {
+    const block = mockSimulationBlock("en");
+    const { options: _omit, ...endWithoutOptions } = block.payload.nodes.done!;
+    const raw = {
+      ...block,
+      payload: {
+        ...block.payload,
+        nodes: {
+          ...block.payload.nodes,
+          done: endWithoutOptions,
+        },
+      },
+    };
+
+    const parsed = generatedSimulationBlockSchema.safeParse(raw);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.payload.nodes.done?.options).toEqual([]);
+    }
   });
 
   it("rejects a Simulation that invents Supporting media", () => {

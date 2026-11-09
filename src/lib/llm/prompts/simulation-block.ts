@@ -44,7 +44,8 @@ export function simulationBlockPrompt(input: {
     "Create one Simulation Block for the lesson below.",
     "Return a single branching decision scenario the learner can walk through.",
     "`start` and `end` must be keys of `nodes`; every node except `end` needs at least",
-    "one option; `score` is a whole number and may be negative.",
+    "one option; the `end` node must set \"options\": [] (empty array, required key).",
+    "`score` is a whole number and may be negative.",
     "Include `payload.motion` with catalog pattern ids only",
     `(${motionList}).`,
     "Never invent Supporting media URLs, paths, or media objects — instructors",
@@ -62,7 +63,8 @@ export function simulationBlockPrompt(input: {
     '   "motion": {"nodeEnter": "fade-up", "choiceSelected": "emphasis-pulse",',
     '     "feedbackReveal": "slide-feedback", "summaryEnter": "summary-rise"},',
     '   "nodes": {"<node id>": {"text": string,',
-    '     "options": [{"label": string, "next": string, "feedback": string, "score": number}]}}}}',
+    '     "options": [{"label": string, "next": string, "feedback": string, "score": number}]},',
+    '     "<end id>": {"text": string, "options": []}}}}',
     "Do not use placeholders.",
   ].join("\n");
 }

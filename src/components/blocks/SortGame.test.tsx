@@ -160,7 +160,7 @@ describe("SortGame learner behavior", () => {
     }));
   });
 
-  it("completes an attempted Challenge after an incorrect check", () => {
+  it("keeps the Challenge open after an incorrect check", () => {
     const onComplete = vi.fn();
     const view = render(
       <I18nProvider locale="en" messages={en}>
@@ -180,7 +180,7 @@ describe("SortGame learner behavior", () => {
       within(view.container).getByRole("button", { name: "Check order" }),
     );
     expect(view.getByText("Correction: First, Second")).toBeTruthy();
-    expect(onComplete).toHaveBeenCalledOnce();
+    expect(onComplete).not.toHaveBeenCalled();
   });
 
   it("renders generated feedback and hint guidance", () => {

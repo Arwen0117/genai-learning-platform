@@ -140,7 +140,13 @@ export function StudentImportPanel({
         if (inputRef.current !== null) {
           inputRef.current.value = "";
         }
-        router.refresh();
+        // Download before refresh: router.refresh() remounts this panel and
+        // would wipe the one-time credentials from client state.
+        if (next.credentials.length > 0) {
+          downloadCredentials(next.credentials, slug);
+        } else {
+          router.refresh();
+        }
       }
     } catch (importError: unknown) {
       console.error("[students] import request failed", importError);
@@ -243,19 +249,30 @@ export function StudentImportPanel({
             </p>
 
             {result.credentials.length === 0 ? null : (
-              <Button
-                className="gap-1.5"
-                onClick={() => {
-                  downloadCredentials(result.credentials, slug);
-                }}
-                size="sm"
-                variant="outline"
-              >
-                <Download aria-hidden="true" />
-                {t("students.import.download", {
-                  count: result.credentials.length,
-                })}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  className="gap-1.5"
+                  onClick={() => {
+                    downloadCredentials(result.credentials, slug);
+                  }}
+                  size="sm"
+                >
+                  <Download aria-hidden="true" />
+                  {t("students.import.download", {
+                    count: result.credentials.length,
+                  })}
+                </Button>
+                <Button
+                  onClick={() => {
+                    router.refresh();
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {t("students.import.refreshRoster")}
+                </Button>
+              </div>
             )}
           </div>
 
@@ -285,7 +302,7 @@ export function StudentImportPanel({
               {t("students.import.noNewAccounts")}
             </p>
           ) : (
-            <p className="text-xs text-muted-foreground">
+            <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
               {t("students.import.credentialsNote")}
             </p>
           )}

@@ -85,19 +85,18 @@ export function ChooseGame({
     if (correct) {
       setSolved(true);
       setNotice(generatedFeedback?.correct ?? t("block.choose.correct"));
-    } else {
-      setNotice(
-        generatedFeedback?.incorrect ??
-          t("block.choose.correction", {
-            answer: options.find((option) => option.correct)?.text ?? "",
-          }),
-      );
+      if (!progressReported.current) {
+        progressReported.current = true;
+        onComplete();
+      }
+      return;
     }
-    // First substantive response completes the Challenge for activity progress.
-    if (!progressReported.current) {
-      progressReported.current = true;
-      onComplete();
-    }
+    setNotice(
+      generatedFeedback?.incorrect ??
+        t("block.choose.correction", {
+          answer: options.find((option) => option.correct)?.text ?? "",
+        }),
+    );
   }
 
   function showHint(): void {
