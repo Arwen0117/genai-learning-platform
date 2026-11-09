@@ -10,7 +10,7 @@ const id = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`;
 function example() {
   const d = createRobotCourseDraft("zh", id);
   d.status = "PUBLISHED"; d.updatedAt = "2026-11-06T00:00:00.000Z";
-  d.levels[0].payload = createNumericDeliveryPayload("zh");
+  d.levels[0].payload = { ...createNumericDeliveryPayload("zh"), tutorial: true };
   d.levels[1].payload = createDeliveryPayload("zh");
   d.levels[0].payload.teaching = { version: 1, concepts: "学习 if 与 loop", pseudocode: "重复执行\n  如果有物品：拾取" };
   return d;

@@ -17,6 +17,7 @@ export const parallelProgrammingEditingSchema = z.object({
   allowed: z.array(z.enum(PARALLEL_COMMANDS)).min(1).max(PARALLEL_COMMANDS.length),
   hints: z.array(z.string().max(2000)).max(12),
   teaching: programmingTeachingSchema.optional(),
+  tutorial: z.boolean().optional(),
   customLevel: z.custom<ParallelLevel>((v) => { try { parseParallelLevel(v); return true; } catch { return false; } }, "Invalid custom map").optional(),
   referenceProgram: z.custom<ParallelProgram>(Array.isArray, "Invalid reference program").optional(),
   knowledge: z.array(z.object({ title: z.string().max(KNOWLEDGE_LIMITS.title), body: z.string().max(KNOWLEDGE_LIMITS.body) })).max(KNOWLEDGE_LIMITS.cards),
@@ -71,6 +72,7 @@ export async function parallelProgrammingVersion(input: ParallelProgrammingPaylo
     level: { ...level, allowed: [...level.allowed].sort() }, limits: PARALLEL_LIMITS,
     ...(p.customLevel ? { referenceProgram: parseParallelProgram(p.referenceProgram, level) } : {}),
     ...(p.teaching ? { teaching: p.teaching } : {}),
+    ...(p.tutorial ? { tutorial: true } : {}),
     task: p.task, hints: p.hints, knowledge: p.knowledge.map((c) => ({ title: c.title, body: c.body })) };
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(snapshot)));
   return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
