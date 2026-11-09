@@ -207,11 +207,6 @@ export function MatchGame({
         }),
     );
     setPickedLeft(null);
-    // An incorrect pair still marks the Challenge attempted/complete.
-    if (!progressReported.current) {
-      progressReported.current = true;
-      onComplete();
-    }
     resetTimerRef.current = window.setTimeout(() => {
       resetTimerRef.current = null;
       setWrongRight(null);

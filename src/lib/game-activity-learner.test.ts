@@ -5,7 +5,7 @@ import { mockGameActivity } from "./llm/prompts/game-activity";
 import { gradeActivity } from "./blocks/activity-result";
 
 describe("Game Activity learner behavior", () => {
-  it("advances ordered Challenge progress after an incorrect first response", () => {
+  it("keeps the learner on a Challenge after an incorrect first response", () => {
     const activity = mockGameActivity("en");
     const first = activity.challenges[0];
     if (first.payload.variant !== "sort") throw new Error("Expected sort");
@@ -15,17 +15,17 @@ describe("Game Activity learner behavior", () => {
     });
 
     expect(grade).toMatchObject({
-      completed: true,
+      completed: false,
       passed: false,
       feedback: { correction: expect.anything() },
     });
 
-    const progress = getGameActivityProgress(activity, [first.id]);
-    expect(progress.nextChallenge?.id).toBe(activity.challenges[1].id);
+    const progress = getGameActivityProgress(activity, []);
+    expect(progress.nextChallenge?.id).toBe(first.id);
     expect(progress.completed).toBe(false);
   });
 
-  it("completes the Game Activity once every Challenge has been attempted", () => {
+  it("completes the Game Activity once every Challenge has been solved", () => {
     const activity = mockGameActivity("en");
     const progress = getGameActivityProgress(
       activity,

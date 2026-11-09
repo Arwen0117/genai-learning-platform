@@ -200,12 +200,6 @@ export function SortGame({
             .join(", "),
         }),
     );
-    // An incorrect response still completes the Challenge so activity
-    // progression can continue after Correction is revealed.
-    if (!progressReported.current) {
-      progressReported.current = true;
-      onComplete();
-    }
   }
 
   function showHint(): void {

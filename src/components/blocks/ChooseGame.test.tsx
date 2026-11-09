@@ -9,7 +9,7 @@ import { BlockForm } from "@/components/teach/editor/block-form";
 import { ChooseGame } from "./ChooseGame";
 
 describe("ChooseGame learner behavior", () => {
-  it("allows incorrect continuation and completes through the accessible buttons", () => {
+  it("allows incorrect continuation and completes only after a correct answer", () => {
     const onComplete = vi.fn();
     const onFinish = vi.fn();
     const view = render(
@@ -32,7 +32,7 @@ describe("ChooseGame learner behavior", () => {
         name: /Distractor|Correct/,
       });
     fireEvent.click(options()[0]);
-    expect(onComplete).toHaveBeenCalledOnce();
+    expect(onComplete).not.toHaveBeenCalled();
     fireEvent.click(options()[1]);
 
     expect(onFinish).toHaveBeenNthCalledWith(1, expect.objectContaining({
@@ -92,7 +92,7 @@ describe("ChooseGame learner behavior", () => {
     }));
   });
 
-  it("completes an attempted Challenge after an incorrect response", () => {
+  it("keeps the Challenge open after an incorrect response", () => {
     const onComplete = vi.fn();
     const view = render(
       <I18nProvider locale="en" messages={en}>
@@ -113,7 +113,7 @@ describe("ChooseGame learner behavior", () => {
       within(view.container).getByRole("button", { name: "Distractor" }),
     );
     expect(view.getByText("Correction: Correct")).toBeTruthy();
-    expect(onComplete).toHaveBeenCalledOnce();
+    expect(onComplete).not.toHaveBeenCalled();
   });
 
   it("lets instructors edit the prompt and choose exactly one correct option", () => {

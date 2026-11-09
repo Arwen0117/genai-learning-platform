@@ -194,19 +194,18 @@ export function gradeActivity(
           .map((_, i) => i)
           .sort((a, b) => p.items[a].order - p.items[b].order);
         const correct = order.filter((id, i) => id === expected[i]).length;
+        const passed = correct === order.length;
         return {
           ...base,
           score: normalizedScore(correct, 0, order.length),
-          passed: correct === order.length,
-          completed: true,
+          passed,
+          // Only a correct solve advances Game Activity progression.
+          completed: passed,
           verification: "server",
           feedback: {
             correct,
             total: order.length,
-            correction:
-              correct === order.length
-                ? null
-                : { expected },
+            correction: passed ? null : { expected },
           },
         };
       }
@@ -230,20 +229,20 @@ export function gradeActivity(
         const matched = new Set(
           choices.filter((c) => c.left === c.right).map((c) => c.left),
         );
+        const passed = matched.size === p.pairs.length;
         return {
           ...base,
           score: normalizedScore(matched.size, 0, p.pairs.length),
-          completed: true,
-          passed: matched.size === p.pairs.length,
+          completed: passed,
+          passed,
           verification: "server",
           feedback: {
             correct: matched.size,
             total: p.pairs.length,
             attempts: choices.length,
-            correction:
-              matched.size === p.pairs.length
-                ? null
-                : { expected: p.pairs.map((_, index) => index) },
+            correction: passed
+              ? null
+              : { expected: p.pairs.map((_, index) => index) },
           },
         };
       }
@@ -256,7 +255,7 @@ export function gradeActivity(
       const correct = p.options[option]?.correct === true;
       return {
         ...base,
-        completed: true,
+        completed: correct,
         passed: correct,
         verification: "server",
         feedback: {

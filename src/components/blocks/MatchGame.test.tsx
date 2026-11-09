@@ -35,7 +35,7 @@ describe("MatchGame learner behavior", () => {
 
     fireEvent.click(left("One"));
     fireEvent.click(rightButtons().find((button) => button.textContent === "Second")!);
-    expect(onComplete).toHaveBeenCalledOnce();
+    expect(onComplete).not.toHaveBeenCalled();
     vi.advanceTimersByTime(600);
     fireEvent.click(left("One"));
     fireEvent.click(rightButtons().find((button) => button.textContent === "First")!);
@@ -96,7 +96,7 @@ describe("MatchGame learner behavior", () => {
     vi.useRealTimers();
   });
 
-  it("completes an attempted Challenge after an incorrect match", () => {
+  it("keeps the Challenge open after an incorrect match", () => {
     vi.useFakeTimers();
     const onComplete = vi.fn();
     const view = render(
@@ -122,7 +122,7 @@ describe("MatchGame learner behavior", () => {
     expect(
       view.getAllByText("Correction: One → First").length,
     ).toBeGreaterThan(0);
-    expect(onComplete).toHaveBeenCalledOnce();
+    expect(onComplete).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 });
